@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  backend:
+    image: vixion/lms_backend
+    pull_policy: always
+    expose:
+      - 9000
+    # command: ["run.sh"]
+    volumes:
+      - ./backend:/app
+      - static-data:/vol/web
+      # - ./log:/var/log
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DEBUG=1
+      - STATIC_DIR=/vol/web
+      - MEDIA_DIR=${STATIC_DIR}/media
+      - LOG_DIR=/var/log
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL}
+    depends_on:
+      - db
+    container_name: backend
+
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "5437:5432"
+    volumes:
+      - lmsdataprod:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASS}
+    container_name: database
+  
+  proxy:
+    build: 
+      context: ./proxy
+    container_name: proxy
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - 82:8012
+    volumes:
+      - static-data:/vol/static
+  
+  frontend:
+    image: vixion/lms_frontend
+    pull_policy: always
+    ports:
+      - "80:3000"
+    environment:
+      - NUXT_API_BASE_URL=${NUXT_API_BASE_URL}
+    container_name: frontend
+
+volumes:
+  lmsdataprod:
+  static-data:

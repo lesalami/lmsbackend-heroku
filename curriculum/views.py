@@ -1,0 +1,542 @@
+"""
+Views for the Curriculum API.
+"""
+import os
+from datetime import datetime, timedelta
+from django.core.files import File
+from django.db.models import Sum, Case, When, Value, IntegerField
+import logging
+from rest_framework import (
+    # generics,
+    # authentication,
+    permissions,
+    status,
+    viewsets,
+    filters
+)
+
+# from rest_framework.settings import api_settings
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from django_filters.rest_framework import DjangoFilterBackend
+
+from curriculum.serializers import (
+    AcademicYearSerializer, StudentSerializer,
+    ParentOrGuardianSerializer, SubjectSerializer,
+    StaffSerializer,
+    ClassSerializer, AcademicTermSerializer,
+    TeacherAssignmentSerializer, StudentClassSerializer,
+    TeacherClassSerializer, FeeSerializer,
+    StudentFeegroupSerializer, PaymentSerializer,
+    PaymentReceiptSerializer
+)
+from core.models import (
+    AcademicYear, Student, ParentOrGuardian,
+    Staff, Subject, Class,
+    AcademicTerm, TeacherAssignment, StudentClass,
+    TeacherClass, Fee, StudentFeeGroup, Payment,
+    PaymentReceipt
+)
+
+from utils.pagination import StandardResultsSetPagination
+from utils.pdf_generate import convert_html_to_pdf
+
+
+logger = logging.getLogger(__name__)
+
+
+class AcademicYearView(viewsets.ModelViewSet):
+    """API viewsets for the Academic Year"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = AcademicYearSerializer
+    queryset = AcademicYear.objects.filter(
+        is_active=True
+        ).order_by("-date_created")
+    http_method_names = ["get", "post", "patch", "delete"]
+
+
+class AcademicTermView(viewsets.ModelViewSet):
+    """API viewsets for the Academic Year"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = AcademicTermSerializer
+    queryset = AcademicTerm.objects.filter(
+        academic_year__is_active=True
+    )
+    http_method_names = ["get", "post", "patch", "delete"]
+
+
+class StudentView(viewsets.ModelViewSet):
+    """API View for Students"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = StudentSerializer
+    queryset = Student.objects.all().order_by("-date_created")
+    http_method_names = ["get", "post", "patch", "delete"]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = [
+        'date_created', 'gender',
+        'is_active'
+        ]
+    search_fields = [
+        'first_name', 'last_name', 'middle_name',
+        'student_id'
+        ]
+
+    def filter_queryset(self, queryset):
+        class_id = self.request.GET.get("student_class", None)
+        if class_id:
+            print(class_id)
+            students_in_the_class = queryset.annotate(
+                class_id_count=Sum(
+                    Case(
+                        When(
+                            student_in_class__student_class=class_id,
+                            then=Value(1)),
+                        default=Value(0),
+                        output_field=IntegerField()
+                    )
+                )
+            )
+            student_filtered = students_in_the_class.filter(
+                class_id_count__gt=0
+            )
+            return super().filter_queryset(student_filtered)
+        return super().filter_queryset(queryset)
+
+    @action(
+            detail=False, methods=["get"],
+            url_path="metrics", url_name="metrics")
+    def metrics(self, request, *args, **kwargs):
+        """Return some metrics on students"""
+        current_term = AcademicTerm.objects.get(is_active=True)
+        current_classes = Class.objects.filter(
+            academic_term__is_active=True
+        )
+        previous_classes = []
+        if current_term.previous:
+            previous_classes = Class.objects.filter(
+                academic_term=current_term.previous
+            )
+        total_students = StudentClass.objects.filter(
+            student_class__in=current_classes
+        ).values_list("student").count()
+        previous_students = StudentClass.objects.filter(
+            student_class__in=previous_classes
+        ).values_list("student").count()
+        percent_change = 100
+        if previous_students != 0:
+            percent_change = (
+                total_students-previous_students)/previous_students
+        change_type = "increase"
+        if percent_change < 0:
+            change_type = "decrease"
+        male_students_count = StudentClass.objects.filter(
+            student_class__in=current_classes,
+            student__is_active=True,
+            student__gender="Male",
+        ).values_list("student").count()
+        female_students_count = StudentClass.objects.filter(
+            student_class__in=current_classes,
+            student__is_active=True,
+            student__gender="Female",
+        ).values_list("student").count()
+        return Response(
+            {
+                "total_students": str(total_students),
+                "male": male_students_count,
+                "female": female_students_count,
+                "change": str(abs(percent_change)) + "%",
+                "change_type": change_type
+            },
+            status=status.HTTP_200_OK
+        )
+
+    @action(
+            detail=True, methods=["get"],
+            url_path="finance", url_name="finance")
+    def finance(self, request, pk=None):
+        """Return financial data on the student"""
+        try:
+            student_class = StudentClass.objects.get(
+                student=self.get_object(),
+                student_class__academic_year__is_active=True
+            )
+            total_fees = student_class.fee_assigned
+            total_paid = student_class.fee_paid
+            owing = student_class.owing
+            fee_group = StudentFeegroupSerializer(
+                total_fees, context={"request": request}
+                ).data
+            return Response({
+                "owing": owing,
+                "fee_group": fee_group,
+                "total_amount_paid": total_paid
+            }, status=status.HTTP_200_OK)
+        except StudentFeeGroup.DoesNotExist:
+            fee_group = {}
+            return Response({
+                "owing": owing,
+                "fee_group": fee_group,
+                "total_amount_paid": total_paid
+            }, status=status.HTTP_404_NOT_FOUND)
+        except StudentClass.DoesNotExist:
+            return Response({
+                "message": "Student does not have have a class assignment"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    @action(
+            detail=True, methods=["get"],
+            url_path="fees", url_name="fees")
+    def student_fee_assigned(self, request, pk=None):
+        """Fee assigned, paid, owing"""
+        acad_term = AcademicTerm.objects.get(is_active=True).term,
+        if not acad_term:
+            acad_term = ""
+        try:
+            student_class = StudentClass.objects.get(
+                student=self.get_object(),
+                student_class__academic_year__is_active=True
+            )
+            if student_class.fee_assigned:
+                fees = student_class.fee_assigned.fees.all()
+                fee_paid = student_class.fee_paid
+                fee_owing = student_class.fee_owing
+                if fees:
+                    fee_list = []
+                    for fee in fees:
+                        amount_paid = Payment.objects.filter(
+                            fee=fee).aggregate(
+                            Sum("amount")
+                        )
+                        fee_list.append({
+                            "fee_id": fee.id,
+                            "fee_name": fee.name,
+                            "academic_year": fee.academic_year.year,
+                            "amount": fee.amount,
+                            "amount_paid": amount_paid["amount__sum"]
+                        })
+                    result = {
+                        "fees": fee_list,
+                        "academic_year": AcademicYear.objects.get(
+                            is_active=True).year,
+                        "academic_term": AcademicTerm.objects.get(
+                            is_active=True).term,
+                        "amount_paid": fee_paid,
+                        "amount_owing": fee_owing,
+                        "owing": student_class.owing
+                    }
+                    return Response(
+                        result,
+                        status=status.HTTP_200_OK
+                    )
+                else:
+                    return Response({
+                        "message": "No fees assigned to the student"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response(
+                    {"message": "Student does not have a fee assignment"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        except StudentClass.DoesNotExist:
+            return Response(
+                {"message": "Student does not have a class assignment"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class ParentOrGuardianView(viewsets.ModelViewSet):
+    """API View for Parent or Guardian"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ParentOrGuardianSerializer
+    queryset = ParentOrGuardian.objects.all().order_by("-date_created")
+    http_method_names = ["get", "post", "patch", "delete"]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = [
+        'date_created'
+        ]
+    search_fields = [
+        'full_name', 'home_care_giver_name', 'name_of_father',
+        'name_of_mother', 'students__first_name',
+        'students__last_name'
+        ]
+
+
+class StaffView(viewsets.ModelViewSet):
+    """API View for the Teacher """
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = StaffSerializer
+    queryset = Staff.objects.filter().order_by("-date_created")
+    http_method_names = ["get", "post", "patch", "delete"]
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = [
+        'date_created', 'gender', 'staff_type',
+        'employment_type', 'is_active'
+        ]
+    search_fields = [
+        'user__first_name', 'user__last_name', 'staff_id',
+        ]
+
+    def get_queryset(self):
+        return self.queryset.filter(
+            user__organization=self.request.user.organization
+            )
+
+    @action(
+            detail=False, methods=["get"],
+            url_path="metrics", url_name="metrics")
+    def metrics(self, request, *args, **kwargs):
+        """Return some metrics on teachers"""
+        current_term = AcademicTerm.objects.get(is_active=True)
+        current_classes = Class.objects.filter(
+            academic_term=current_term
+        )
+        previous_classes = []
+        if current_term.previous:
+            previous_classes = Class.objects.filter(
+                academic_term=current_term.previous
+            )
+        total_teachers = len(set(TeacherClass.objects.filter(
+            teacher_class__in=current_classes
+        ).values_list("teacher")))
+        previous_teachers = len(set(TeacherClass.objects.filter(
+            teacher_class__in=previous_classes
+        ).values_list("teacher")))
+        percent_change = 100
+        if previous_teachers != 0:
+            percent_change = (
+                total_teachers-previous_teachers)/previous_teachers
+        change_type = "increase"
+        if percent_change < 0:
+            change_type = "decrease"
+        return Response(
+            {
+                "total_teachers": str(total_teachers),
+                "change": str(abs(percent_change)) + "%",
+                "change_type": change_type
+            },
+            status=status.HTTP_200_OK
+        )
+
+
+class SubjectView(viewsets.ModelViewSet):
+    """API View for the Subject"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = SubjectSerializer
+    queryset = Subject.objects.all().order_by("-date_created")
+    http_method_names = ["get", "post", "patch", "delete"]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = [
+        'date_created'
+        ]
+    search_fields = [
+        'name', 'subject_id',
+        ]
+
+
+# class NonTeachingStaffView(viewsets.ModelViewSet):
+#     permission_classes = [permissions.IsAuthenticated]
+#     serializer_class = NonTeachingStaffSerializer
+#     queryset = NonTeachingStaff.objects.all()
+#     http_method_names = ["get", "post", "patch", "delete"]
+#     pagination_class = StandardResultsSetPagination
+#     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+#     filterset_fields = [
+#         'is_active'
+#         ]
+#     search_fields = [
+#         'full_name', 'designation', 'phone_number',
+#         ]
+
+
+class ClassView(viewsets.ModelViewSet):
+    """API View for the Class View"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ClassSerializer
+    queryset = Class.objects.filter(
+        academic_term__is_active=True,
+        academic_year__is_active=True
+    ).order_by("-date_created")
+    http_method_names = ["get", "post", "patch", "delete"]
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = [
+        'date_created'
+        ]
+    search_fields = [
+        'name', 'academic_year__year', 'academic_term__term'
+        ]
+
+
+class StudentFeeGroupView(viewsets.ModelViewSet):
+    """API View for the student fee grup"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = StudentFeegroupSerializer
+    queryset = StudentFeeGroup.objects.all()
+    http_method_names = ["get", "post", "patch", "delete"]
+    pagination_class = StandardResultsSetPagination
+
+
+class TeacherAssignmentView(viewsets.ModelViewSet):
+    """API view for the teacher to subject mapping"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TeacherAssignmentSerializer
+    queryset = TeacherAssignment.objects.all().order_by("-date_created")
+    http_method_names = ["get", "post", "patch", "delete"]
+    pagination_class = StandardResultsSetPagination
+
+
+class StudentClassView(viewsets.ModelViewSet):
+    """API View for the student to class mapping"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = StudentClassSerializer
+    queryset = StudentClass.objects.all().order_by("-date_created")
+    http_method_names = ["get", "post", "patch", "delete"]
+    pagination_class = StandardResultsSetPagination
+
+
+class TeacherClassView(viewsets.ModelViewSet):
+    """API View for the teacher to class mapping"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TeacherClassSerializer
+    queryset = TeacherClass.objects.all().order_by("-date_created")
+    http_method_names = ["get", "post", "patch", "delete"]
+    pagination_class = StandardResultsSetPagination
+
+
+class FeeView(viewsets.ModelViewSet):
+    """API Views for the Fee model"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = FeeSerializer
+    queryset = Fee.objects.filter(
+        academic_year__is_active=True,
+        academic_term__is_active=True
+    )
+    http_method_names = ["get", "post", "patch", "delete"]
+
+
+class PaymentView(viewsets.ModelViewSet):
+    """API View for Fee Payment"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = PaymentSerializer
+    queryset = Payment.objects.filter(
+        academic_year__is_active=True
+    )
+    http_method_names = ["get", "post"]
+
+    @action(
+            detail=False, methods=["get"],
+            url_path="metrics", url_name="metrics")
+    def metrics(self, request, *args, **kwargs):
+        """Return some metrics on Payment"""
+        current_term = AcademicTerm.objects.get(is_active=True)
+        current_payment = self.queryset.filter(
+            academic_term=current_term
+        ).aggregate(Sum("amount")).get("amount__sum")
+        previous_payment = 0
+        if current_term.previous:
+            previous_payment = self.queryset.filter(
+                academic_term=current_term.previous
+            ).aggregate(Sum("amount")).get("amount__sum")
+        percent_change = 100
+        if previous_payment != 0:
+            percent_change = (
+                current_payment-previous_payment)/previous_payment
+        change_type = "increase"
+        if percent_change < 0:
+            change_type = "decrease"
+        monthly_payment = self.queryset.filter(
+            date_created__year=datetime.now().year,
+            date_created__month=datetime.now().month
+            ).aggregate(Sum("amount"))
+        start_week = datetime.today() - timedelta(datetime.today().weekday())
+        end_week = start_week + timedelta(7)
+        print(start_week, end_week)
+        weekly_payment = self.queryset.filter(
+            date_created__range=[start_week, end_week]
+        ).aggregate(Sum("amount"))
+        return Response(
+            {
+                "total_payment": current_payment,
+                "change": str(abs(percent_change)) + "%",
+                "change_type": change_type,
+                "monthly_payment": monthly_payment["amount__sum"],
+                "weekly_payment": weekly_payment["amount__sum"]
+            },
+            status=status.HTTP_200_OK
+        )
+
+    @action(
+            detail=True, methods=["get"],
+            url_path="receipt", url_name="receipt")
+    def get_receipt(self, request, pk=None):
+        """Generate and retun a PDF receipt given Payment ID"""
+        payment_data = self.get_object()
+        org = request.user.organization
+        print(payment_data)
+        if payment_data:
+            try:
+                receipt = PaymentReceipt.objects.get(
+                    payment__id=payment_data.id
+                    )
+                result = PaymentReceiptSerializer(
+                        instance=receipt, context={"request": request}
+                        )
+                return Response(
+                    result.data,
+                    status=status.HTTP_200_OK
+                )
+            except PaymentReceiptSerializer.DoesNotExist:
+                receipt_number = str(payment_data.id).replace("-", "")
+                data_dict = {
+                    "organization_name": org.name,
+                    "organization_address": org.address,
+                    "payer": payment_data.student.__str__(),
+                    "date": payment_data.date_created.strftime("%d-%m-%Y"),
+                    "receipt_number": receipt_number[:8],
+                    "client_reference": payment_data.student,
+                    "description": f"Payment for {payment_data.fee.name}",
+                    "income_amount": payment_data.amount,
+                    "payment_time": payment_data.date_created.strftime(
+                        "%I:%M %p"
+                        )
+                }
+                pdf = convert_html_to_pdf(
+                    data_dict, "receipt.html", f'{receipt_number}.pdf'
+                    )
+                if pdf:
+                    receipt = PaymentReceipt.objects.create(
+                        payment=payment_data,
+                        receipt_number=receipt_number[:8],
+                        purpose=f"Payment for {payment_data.fee.name}"
+                    )
+                    # receipt_file = ""
+                    f = open(f'{receipt_number}.pdf', 'rb')
+                    receipt.file.save(
+                        name=f'{receipt_number}.pdf',
+                        content=File(f), save=True
+                        )
+                    receipt.save()
+                    result = PaymentReceiptSerializer(
+                        instance=receipt, context={"request": request}
+                        )
+                    os.remove(f'{receipt_number}.pdf')
+                    return Response(
+                        result.data,
+                        status=status.HTTP_200_OK
+                    )
+                else:
+                    return Response(
+                        {"message": "Receipt generation faile"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+        else:
+            return Response(
+                {"message": "Payment not found"},
+                status=status.HTTP_400_BAD_REQUEST
+                )

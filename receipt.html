@@ -1,0 +1,113 @@
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta http-equiv="Content-Style-Type" content="text/css" />
+    <meta name="generator" content="Aspose.Words for .NET 23.12.0" />
+    <title>Salcon Receipt</title>
+    <style type="text/css">
+      
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <div>
+        <p style="text-align: justify; line-height: 48pt">
+          <span
+            style="
+              color: #23c6b9;
+              font-family: Verdana, Geneva, Tahoma, sans-serif;
+              font-size: 32pt;
+            "
+          >
+            Receipt
+          </span>
+          <span style="float: right; margin-top: 12px">
+            <img style="height: 54px" src="https://webappstatic.s3.eu-west-1.amazonaws.com/favicon.png" />
+          </span>
+        </p>
+        <hr color="#23c6b9" size="4" />
+
+        <div class="addresses">
+          <div width="100%" style="width: 100%">
+            <div id="business_details">
+              <h3>{{ organization_name }}</h3>
+              <div>{{ organization_address }}</div>
+              <div>P. O. Box AF3235, Madina-Accra</div>
+              <div>Phone: 0244807921 | 0553972671</div>
+            </div>
+            <div width="100%" style="margin-top: 48pt">
+              <div id="business_details">
+                <h3>To</h3>
+                <h3 class="buyer_name">Buyer Name</h3>
+                <div>{{ payer }}</div>
+                {% if payer_address %}
+                <div>{{ payer_address }}</div>
+                {% else %}
+                <div>Accra</div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          <div class="metadata">
+            <div class="item">
+              <span style="">Date: </span>
+              <span style="float: right">{{ date }}</span>
+            </div>
+            <div class="item">
+              <span style="">Time: </span>
+              <span style="float: right">{{ payment_time }}</span>
+            </div>
+            <div class="item">
+            </div>
+            <div class="item">
+              <span style="">Client Reference: </span>
+              <span style="float: right">{{ client_reference }}</span>
+            </div>
+            <div class="item">
+              <span style="">Receipt Number: </span>
+              <span style="float: right">{{ receipt_number }}</span>
+            </div>
+          </div>
+        </div>
+
+        <hr color="#23c6b9" size="4" width="100%" />
+
+        <div>
+          <table>
+            <tr>
+              <thead>
+                <th>Decription</th>
+                <th>Qty</th>
+                <th>Unit</th>
+                <th>Unit Price</th>
+                <th>Total</th>
+              </thead>
+            </tr>
+            <tbody>
+              <tr>
+                <td style="width: 50%">{{ description }}</td>
+                <td>1</td>
+                <td>Academic Year</td>
+                <td>{{ income_amount }}</td>
+                <td>{{ income_amount }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="total-amount">
+            <div class="info">
+              <span class="label">Total amount paid</span>
+              <span class="amount">{{income_amount }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="footer">
+        <div class="">
+          <h3>Higher Heights Academy</h3>
+          <div>Pantang Junction | P. O. Box AF3235, Madina-Accra | Phone: 0244807921 | 0553972671</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

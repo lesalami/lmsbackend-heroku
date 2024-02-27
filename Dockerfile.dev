@@ -1,0 +1,60 @@
+ARG PYTHON_VERSION=3.11-alpine
+
+FROM python:${PYTHON_VERSION}
+LABEL maintainer="Tonny-Bright Sogli"
+
+ENV PYTHONUNBUFFERED 1
+ENV SECRET_KEY bgapemwun3@saj91y4z0apwmq0apl26sh
+ENV STATIC_DIR /vol/static_dir
+ENV MEDIA_DIR ${STATIC_DIR}/media
+ENV LOG_DIR /var/log
+ENV LOG_FILENAME school_backend.log
+ENV FRONTEND_BASE_URL http://localhost:3000
+
+COPY ./requirements.txt /tmp/requirements.txt
+COPY ./requirements.dev.txt /tmp/requirements.dev.txt
+# COPY ./scripts /scripts
+
+COPY ./backend /app
+
+ARG DEV=true
+RUN python -m venv /py && \
+    /py/bin/pip install --upgrade pip && \
+    apk add --update --no-cache postgresql-client pango font-dejavu-sans-mono-nerd font-dejavu && \
+    apk add --update --no-cache --virtual .tmp-build-deps \
+    build-base postgresql-dev musl-dev gcc linux-headers && \
+    /py/bin/pip install -r /tmp/requirements.txt && \
+    if [ $DEV = "true"]; \
+    then /py/bin/pip install -r /tmp/requirements.dev.txt ; \
+    fi && \
+    rm -rf /tmp && \
+    apk del .tmp-build-deps && \
+    adduser \
+    --disabled-password \
+    --no-create-home \
+    django-user && \
+    mkdir -p ${STATIC_DIR} && \
+    mkdir -p ${MEDIA_DIR} && \
+    mkdir -p ${LOG_DIR} && \
+    touch ${LOG_DIR}/${LOG_FILENAME} && \
+    chown -R django-user:django-user /vol && \
+    chmod -R 755 /vol && \
+    chmod -R +x ${LOG_DIR} && \
+    chown -R django-user:django-user ${LOG_DIR}/${LOG_FILENAME} && \
+    chmod -R 755 ${STATIC_DIR} && \
+    chmod -R +x ${STATIC_DIR} && \
+    chown -R django-user:django-user ${STATIC_DIR} && \
+    chmod -R 755 ${MEDIA_DIR} && \
+    chmod -R +x ${MEDIA_DIR} && \
+    chown -R django-user:django-user ${MEDIA_DIR} && \
+    chmod 747 /home
+
+WORKDIR /app
+
+EXPOSE 8056
+
+ENV PATH="/py/bin:$PATH"
+
+USER django-user
+
+# CMD ["run.sh"]
