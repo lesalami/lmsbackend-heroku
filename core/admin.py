@@ -80,6 +80,7 @@ class StudentClassAdmin(admin.ModelAdmin):
     search_fields = [
         "student__first_name", "student__last_name", "student_class__name"]
     list_per_page = 10
+    readonly_fields = ("fee_paid", "fee_owing")
 
 
 class SubjectAdmin(admin.ModelAdmin):

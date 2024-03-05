@@ -30,7 +30,7 @@ SECRET_KEY = 'django-insecure-c^du8oqah#y&8cmg126!&)m64%6nhxge)%@$h8!1vq5km*z(p%
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # DEBUG = bool(int(os.environ.get("DEBUG", 1)))
-DEBUG = True
+DEBUG = bool(int(os.environ.get("DEBUG", 1)))
 
 ALLOWED_HOSTS = ["higherheights-backend.herokuapp.com"]
 ALLOWED_HOSTS.extend(
@@ -125,8 +125,9 @@ DATABASES = {
         "PASSWORD": os.environ.get("DB_PASS"),
     }
 }
-db_from_env = dj_database_url.config(conn_max_age=600)
-DATABASES['default'].update(db_from_env)
+if not DEBUG:
+    db_from_env = dj_database_url.config(conn_max_age=600)
+    DATABASES['default'].update(db_from_env)
 
 
 # Password validation
@@ -166,30 +167,30 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
 # STATIC_URL = '/static/'
-USE_S3 = False
+USE_S3 = os.environ.get("USE_S3", False)
 
-# if USE_S3:
-#     # aws settings
-#     AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
-#     AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
-#     AWS_STORAGE_BUCKET_NAME = os.environ.get("AWS_STORAGE_BUCKET_NAME")
-#     AWS_DEFAULT_ACL = None
-#     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
-#     AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
-#     # s3 static settings
-#     STATIC_LOCATION = 'static'
-#     STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/'
-#     STATICFILES_STORAGE = 'storages.backends.s3boto3.S3StaticStorage'
-#     # s3 public media settings
-#     PUBLIC_MEDIA_LOCATION = 'media'
-#     MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/'
-#     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-# else:
-STATIC_URL = 'static/'
-STATIC_ROOT = os.environ.get("STATIC_DIR")
-MEDIA_URL = "media/"
-MEDIA_ROOT = os.environ.get("MEDIA_DIR")
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+if USE_S3:
+    # aws settings
+    AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
+    AWS_STORAGE_BUCKET_NAME = os.environ.get("AWS_STORAGE_BUCKET_NAME")
+    AWS_DEFAULT_ACL = None
+    AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
+    AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
+    # s3 static settings
+    STATIC_LOCATION = 'static'
+    STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/'
+    STATICFILES_STORAGE = 'storages.backends.s3boto3.S3StaticStorage'
+    # s3 public media settings
+    PUBLIC_MEDIA_LOCATION = 'media'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/'
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+else:
+    STATIC_URL = 'static/'
+    STATIC_ROOT = os.environ.get("STATIC_DIR")
+    MEDIA_URL = "media/"
+    MEDIA_ROOT = os.environ.get("MEDIA_DIR")
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
