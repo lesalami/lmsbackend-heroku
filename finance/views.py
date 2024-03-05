@@ -35,7 +35,7 @@ from drf_spectacular.utils import extend_schema
 
 from core.models import (
     AcademicTerm,
-    # AcademicYear,
+    AcademicYear,
     User
 )
 
@@ -154,14 +154,14 @@ class IncomeView(viewsets.ModelViewSet):
             url_path="metrics", url_name="metrics")
     def metrics(self, request, *args, **kwargs):
         """Return some metrics on Income"""
-        current_term = AcademicTerm.objects.get(is_active=True)
+        current_year = AcademicYear.objects.get(is_active=True)
         current_income = self.queryset.filter(
-            academic_term=current_term
+            academic_year=current_year
         ).aggregate(Sum("amount")).get("amount__sum")
         previous_income = 0
-        if current_term.previous:
+        if current_year.previous:
             previous_income = self.queryset.filter(
-                academic_term=current_term.previous
+                academic_term=current_year.previous
             ).aggregate(Sum("amount")).get("amount__sum")
         percent_change = 100
         if previous_income != 0:
@@ -302,14 +302,14 @@ class ExpenditureView(viewsets.ModelViewSet):
             url_path="metrics", url_name="metrics")
     def metrics(self, request, *args, **kwargs):
         """Return some metrics on Expenditure"""
-        current_term = AcademicTerm.objects.get(is_active=True)
+        current_year = AcademicYear.objects.get(is_active=True)
         current_expenditure = self.queryset.filter(
-            academic_term=current_term
+            academic_year=current_year
         ).aggregate(Sum("amount")).get("amount__sum")
         previous_expenditure = 0
-        if current_term.previous:
+        if current_year.previous:
             previous_expenditure = self.queryset.filter(
-                academic_term=current_term.previous
+                academic_year=current_year.previous
             ).aggregate(Sum("amount")).get("amount__sum")
         percent_change = 100
         if previous_expenditure != 0:
