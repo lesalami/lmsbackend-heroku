@@ -181,32 +181,38 @@ class StudentSerializer(BaseModelSerializer):
         return instance
 
     def update(self, instance, validated_data):
-        std_class = validated_data.get("student_class")
+        std_class = validated_data.pop("student_class", None)
         fee_assigned = validated_data.pop("fee_assigned", None)
-        if std_class:
-            validated_data.pop("student_class")
+        fee_grp = StudentFeeGroup.objects.get(id=fee_assigned)
         updated_instance = super().update(instance, validated_data)
         if std_class:
             if StudentClass.objects.filter(
-                student=updated_instance,
-                student_class=std_class
-            ).exists():
-                pass
-            else:
-                if StudentClass.objects.filter(student=instance).exists():
-                    StudentClass.objects.get(student=instance).delete()
-                sdc_serializer = StudentClassSerializer(
-                    data={
-                        "student": instance.pk,
-                        "student_class": std_class,
-                        "fee_assigned": fee_assigned
-                        },
-                    context=self.context
-                    )
-                if sdc_serializer.is_valid():
-                    sdc_serializer.save()
-                else:
-                    print(sdc_serializer.errors)
+                    student=updated_instance,
+                    student_class=std_class
+                    ).exists():
+                stc_validated = {
+                    "student": updated_instance,
+                    "fee_assigned": fee_grp
+                }
+                StudentClassSerializer().update(
+                    instance=StudentClass.objects.get(
+                        student=updated_instance,
+                        student_class=std_class
+                        ),
+                    validated_data=stc_validated
+                )
+            # else:
+        if StudentClass.objects.filter(student=instance).exists():
+            stc_validated = {
+                "student": updated_instance,
+                "fee_assigned": fee_grp
+            }
+            StudentClassSerializer(context=self.context).update(
+                instance=StudentClass.objects.get(
+                    student=updated_instance
+                    ),
+                validated_data=stc_validated
+            )
         return updated_instance
 
 
@@ -529,19 +535,12 @@ class ClassSerializer(BaseModelSerializer):
         required=False, read_only=True,
         format="%d-%m-%Y", input_formats=settings.DATE_INPUT_FORMATS
     )
-    academic_year_name = serializers.ReadOnlyField(
-        source="academic_year.year"
-    )
-    academic_term_name = serializers.ReadOnlyField(
-        source="academic_term.term"
-    )
 
     class Meta:
         model = Class
         fields = [
             "id", "date_created", "last_modified",
-            "name", "academic_year", "academic_year_name",
-            "academic_term", "academic_term_name",
+            "name",
         ]
         read_only_fields = ["id", "date_created", "last_modified"]
 
@@ -603,12 +602,29 @@ class StudentClassSerializer(BaseModelSerializer):
         fields = [
             "id", "date_created", "last_modified",
             "student", "student_class", "fee_paid",
-            "fee_assigned", "fee_owing", "owing"
+            "fee_assigned", "fee_owing", "owing",
+            "academic_year"
         ]
         read_only_fields = [
             "id", "date_created", "last_modified",
             "owing"
             ]
+
+    def create(self, validated_data):
+        academic_year = validated_data.get("academic_year", None)
+        if not academic_year:
+            validated_data["academic_year"] = AcademicYear.objects.get(
+                is_active=True
+                )
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        academic_year = validated_data.get("academic_year", None)
+        if not academic_year:
+            validated_data["academic_year"] = AcademicYear.objects.get(
+                is_active=True
+                )
+        return super().update(instance, validated_data)
 
 
 class PaymentSerializer(serializers.ModelSerializer):
