@@ -163,6 +163,12 @@ class IncomeSerializer(BaseModelSerializer):
     academic_term = serializers.ReadOnlyField(
         source="academic_term.term"
     )
+    academic_year_id = serializers.ReadOnlyField(
+        source="academic_year.id"
+    )
+    academic_term_id = serializers.ReadOnlyField(
+        source="academic_term.id"
+    )
     uploaded_file_obj = serializers.SerializerMethodField()
     student_obj = serializers.SerializerMethodField()
     income_type_obj = serializers.SerializerMethodField()
@@ -226,6 +232,7 @@ class IncomeSerializer(BaseModelSerializer):
         fields = [
             "id", "date_created", "last_modified",
             "income_type", "academic_year", "academic_term",
+            "academic_term_id", "academic_year_id",
             "amount", "purpose", "payer", "student",
             "income_date", "income_time",
             "uploaded_file", "tax", "uploaded_file_obj", "student_obj",
@@ -285,6 +292,12 @@ class ExpenditureSerializer(BaseModelSerializer):
     academic_term = serializers.ReadOnlyField(
         source="academic_term.term"
     )
+    academic_year_id = serializers.ReadOnlyField(
+        source="academic_year.id"
+    )
+    academic_term_id = serializers.ReadOnlyField(
+        source="academic_term.id"
+    )
     user_obj = serializers.SerializerMethodField()
     uploaded_file_obj = serializers.SerializerMethodField()
     expenditure_type_obj = serializers.SerializerMethodField()
@@ -328,7 +341,8 @@ class ExpenditureSerializer(BaseModelSerializer):
             "amount", "expenditure_type", "expenditure_type_name",
             "expenditure_type_obj", "uploaded_file_obj",
             "user_obj", "purpose", "invoice",
-            "academic_year", "academic_term", "expense_date",
+            "academic_year", "academic_term", "academic_term_id",
+            "academic_year_id", "expense_date",
             "uploaded_file", "supplier", "payment_type", "supplier_obj"
         ]
         read_only_fields = [
