@@ -131,9 +131,11 @@ class StudentView(viewsets.ModelViewSet):
                 academic_year=current_year.previous
             ).values_list("student").count()
         percent_change = 100
-        if previous_students != 0:
+        if previous_students is not None and previous_students > 0:
             percent_change = (
                 total_students-previous_students)/previous_students
+        else:
+            previous_students = 0
         change_type = "increase"
         if percent_change < 0:
             change_type = "decrease"
@@ -470,9 +472,11 @@ class PaymentView(viewsets.ModelViewSet):
                 academic_year=current_year.previous
             ).aggregate(Sum("amount")).get("amount__sum")
         percent_change = 100
-        if previous_payment != 0:
+        if previous_payment is not None and previous_payment > 0:
             percent_change = (
                 current_payment-previous_payment)/previous_payment
+        else:
+            previous_payment = 0
         change_type = "increase"
         if percent_change < 0:
             change_type = "decrease"

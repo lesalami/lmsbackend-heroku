@@ -164,9 +164,11 @@ class IncomeView(viewsets.ModelViewSet):
                 academic_term=current_year.previous
             ).aggregate(Sum("amount")).get("amount__sum")
         percent_change = 100
-        if previous_income != 0:
+        if previous_income is not None and previous_income > 0:
             percent_change = (
                 current_income-previous_income)/previous_income
+        else:
+            previous_income = 0
         change_type = "increase"
         if percent_change < 0:
             change_type = "decrease"
@@ -312,9 +314,11 @@ class ExpenditureView(viewsets.ModelViewSet):
                 academic_year=current_year.previous
             ).aggregate(Sum("amount")).get("amount__sum")
         percent_change = 100
-        if previous_expenditure != 0:
+        if previous_expenditure is not None and previous_expenditure > 0:
             percent_change = (
                 current_expenditure-previous_expenditure)/previous_expenditure
+        else:
+            previous_expenditure = 0
         change_type = "increase"
         if percent_change < 0:
             change_type = "decrease"
