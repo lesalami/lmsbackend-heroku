@@ -41,6 +41,8 @@ from core.models import (
 
 from utils.pagination import StandardResultsSetPagination
 from utils.pdf_generate import convert_html_to_pdf
+from core.utils import StaffType
+from utils.custom_permissions import SchoolAdmin
 
 
 logger = logging.getLogger(__name__)
@@ -68,7 +70,11 @@ class AcademicTermView(viewsets.ModelViewSet):
 
 class StudentView(viewsets.ModelViewSet):
     """API View for Students"""
-    permission_classes = [permissions.IsAuthenticated]
+    permissions = {
+        'default': (permissions.IsAuthenticated,),
+        'partial_update': (SchoolAdmin,),
+        'update': (SchoolAdmin,)
+        }
     serializer_class = StudentSerializer
     queryset = Student.objects.all().order_by("-date_created")
     http_method_names = ["get", "post", "patch", "delete"]
@@ -82,6 +88,12 @@ class StudentView(viewsets.ModelViewSet):
         'first_name', 'last_name', 'middle_name',
         'student_id'
         ]
+
+    def get_permissions(self):
+        self.permission_classes = self.permissions.get(
+            self.action, self.permissions['default']
+            )
+        return super().get_permissions()
 
     def filter_queryset(self, queryset):
         class_id = self.request.GET.get("student_class", None)
@@ -109,21 +121,15 @@ class StudentView(viewsets.ModelViewSet):
             url_path="metrics", url_name="metrics")
     def metrics(self, request, *args, **kwargs):
         """Return some metrics on students"""
-        current_term = AcademicTerm.objects.get(is_active=True)
-        current_classes = Class.objects.filter(
-            academic_term__is_active=True
-        )
-        previous_classes = []
-        if current_term.previous:
-            previous_classes = Class.objects.filter(
-                academic_term=current_term.previous
-            )
+        current_year = AcademicYear.objects.get(is_active=True)
         total_students = StudentClass.objects.filter(
-            student_class__in=current_classes
+            academic_year=current_year
         ).values_list("student").count()
-        previous_students = StudentClass.objects.filter(
-            student_class__in=previous_classes
-        ).values_list("student").count()
+        previous_students = 0
+        if current_year.previous:
+            previous_students = StudentClass.objects.filter(
+                academic_year=current_year.previous
+            ).values_list("student").count()
         percent_change = 100
         if previous_students != 0:
             percent_change = (
@@ -132,12 +138,12 @@ class StudentView(viewsets.ModelViewSet):
         if percent_change < 0:
             change_type = "decrease"
         male_students_count = StudentClass.objects.filter(
-            student_class__in=current_classes,
+            academic_year=current_year,
             student__is_active=True,
             student__gender="Male",
         ).values_list("student").count()
         female_students_count = StudentClass.objects.filter(
-            student_class__in=current_classes,
+            academic_year=current_year,
             student__is_active=True,
             student__gender="Female",
         ).values_list("student").count()
@@ -245,6 +251,36 @@ class StudentView(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+    @action(
+           detail=False, methods=["POST"],
+           url_path="fee-group-assignment", url_name="fee-group-assignment"
+    )
+    def assigned_fee_group_to_students(self, request, *args, **kwargs):
+        """Assign fee group to multiple students"""
+        try:
+            student_ids = request.data["students"]
+            fee_group = request.data["fee_group"]
+            student_fee_group = StudentFeeGroup.objects.get(id=fee_group)
+            students = self.queryset.filter(id__in=student_ids)
+            for student in students:
+                student_class = StudentClass.objects.get(
+                    academic_year__is_active=True,
+                    student=student
+                )
+                student_class.fee_assigned = student_fee_group
+                student_class.save()
+            return Response(
+                {"message": "Successfully added fee group to Students"},
+                status=status.HTTP_200_OK)
+        except StudentClass.DoesNotExist:
+            return Response({
+                "message": "Student does not have a class in the current academic year"
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            return Response({
+                "message": exc.__str__()
+            }, status.HTTP_400_BAD_REQUEST)
+
 
 class ParentOrGuardianView(viewsets.ModelViewSet):
     """API View for Parent or Guardian"""
@@ -291,33 +327,16 @@ class StaffView(viewsets.ModelViewSet):
             url_path="metrics", url_name="metrics")
     def metrics(self, request, *args, **kwargs):
         """Return some metrics on teachers"""
-        current_term = AcademicTerm.objects.get(is_active=True)
-        current_classes = Class.objects.filter(
-            academic_term=current_term
-        )
-        previous_classes = []
-        if current_term.previous:
-            previous_classes = Class.objects.filter(
-                academic_term=current_term.previous
-            )
-        total_teachers = len(set(TeacherClass.objects.filter(
-            teacher_class__in=current_classes
-        ).values_list("teacher")))
-        previous_teachers = len(set(TeacherClass.objects.filter(
-            teacher_class__in=previous_classes
-        ).values_list("teacher")))
-        percent_change = 100
-        if previous_teachers != 0:
-            percent_change = (
-                total_teachers-previous_teachers)/previous_teachers
-        change_type = "increase"
-        if percent_change < 0:
-            change_type = "decrease"
+        total_teachers = Staff.objects.filter(
+            is_active=True, staff_type=StaffType.Teaching
+            ).count()
+        total_teachers_non = Staff.objects.filter(
+            is_active=True, staff_type=StaffType.Non_Teaching
+            ).count()
         return Response(
             {
-                "total_teachers": str(total_teachers),
-                "change": str(abs(percent_change)) + "%",
-                "change_type": change_type
+                "total_teachers": total_teachers,
+                "total_non_teaching_staff": total_teachers_non,
             },
             status=status.HTTP_200_OK
         )
@@ -358,10 +377,7 @@ class ClassView(viewsets.ModelViewSet):
     """API View for the Class View"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ClassSerializer
-    queryset = Class.objects.filter(
-        academic_term__is_active=True,
-        academic_year__is_active=True
-    ).order_by("-date_created")
+    queryset = Class.objects.all().order_by("-date_created")
     http_method_names = ["get", "post", "patch", "delete"]
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
@@ -393,11 +409,21 @@ class TeacherAssignmentView(viewsets.ModelViewSet):
 
 class StudentClassView(viewsets.ModelViewSet):
     """API View for the student to class mapping"""
-    permission_classes = [permissions.IsAuthenticated]
+    permissions = {
+        'default': (permissions.IsAuthenticated,),
+        'partial_update': (SchoolAdmin,),
+        'update': (SchoolAdmin,)
+        }
     serializer_class = StudentClassSerializer
     queryset = StudentClass.objects.all().order_by("-date_created")
     http_method_names = ["get", "post", "patch", "delete"]
     pagination_class = StandardResultsSetPagination
+
+    def get_permissions(self):
+        self.permission_classes = self.permissions.get(
+            self.action, self.permissions['default']
+            )
+        return super().get_permissions()
 
 
 class TeacherClassView(viewsets.ModelViewSet):
@@ -434,14 +460,14 @@ class PaymentView(viewsets.ModelViewSet):
             url_path="metrics", url_name="metrics")
     def metrics(self, request, *args, **kwargs):
         """Return some metrics on Payment"""
-        current_term = AcademicTerm.objects.get(is_active=True)
+        current_year = AcademicYear.objects.get(is_active=True)
         current_payment = self.queryset.filter(
-            academic_term=current_term
+            academic_year__is_active=True
         ).aggregate(Sum("amount")).get("amount__sum")
         previous_payment = 0
-        if current_term.previous:
+        if current_year.previous:
             previous_payment = self.queryset.filter(
-                academic_term=current_term.previous
+                academic_year=current_year.previous
             ).aggregate(Sum("amount")).get("amount__sum")
         percent_change = 100
         if previous_payment != 0:
@@ -491,7 +517,7 @@ class PaymentView(viewsets.ModelViewSet):
                     result.data,
                     status=status.HTTP_200_OK
                 )
-            except PaymentReceiptSerializer.DoesNotExist:
+            except PaymentReceipt.DoesNotExist:
                 receipt_number = str(payment_data.id).replace("-", "")
                 data_dict = {
                     "organization_name": org.name,
