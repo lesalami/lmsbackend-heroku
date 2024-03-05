@@ -97,7 +97,7 @@ payment_type_choices = (
 
 
 class PaymentMethod(Enum):
-    Mobile_money = "Money money"
+    Mobile_Money = "Mobile Money"
     Bank = "Bank"
     Cash = "Cash"
 
@@ -384,4 +384,3 @@ countries_choices = (
   ("ZM", "Zambia"),
   ("ZW", "Zimbabwe"),
 )
-

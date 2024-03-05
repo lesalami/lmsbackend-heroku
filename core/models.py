@@ -405,20 +405,20 @@ class Class(models.Model):
     date_created = models.DateTimeField(auto_now_add=True, db_index=True)
     last_modified = models.DateTimeField(auto_now=True)
     name = models.CharField(max_length=300)
-    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE)
-    academic_term = models.ForeignKey(AcademicTerm, on_delete=models.CASCADE)
+    # academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE)
+    # academic_term = models.ForeignKey(AcademicTerm, on_delete=models.CASCADE)
     # school_fee = models.ForeignKey(
     #     Fee, on_delete=models.SET_NULL, null=True, blank=True
     #     )
 
     def __str__(self):
-        return f"{self.name} for {self.academic_year.year} Academic Year"
+        return f"{self.name}"
 
     class Meta:
         verbose_name_plural = "Classes"
         constraints = [
             models.UniqueConstraint(
-                fields=["name", "academic_term"],
+                fields=["name"],
                 name="unique_classes"
                 )
         ]
@@ -449,6 +449,10 @@ class StudentClass(models.Model):
     )
     date_created = models.DateTimeField(auto_now_add=True, db_index=True)
     last_modified = models.DateTimeField(auto_now=True)
+    academic_year = models.ForeignKey(
+        AcademicYear, on_delete=models.CASCADE,
+        null=True
+        )
     student = models.ForeignKey(
         Student, on_delete=models.CASCADE,
         related_name="student_in_class"
