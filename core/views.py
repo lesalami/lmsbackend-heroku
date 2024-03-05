@@ -146,7 +146,7 @@ class DashboardView(APIView):
             is_active=True, staff_type=StaffType.Non_Teaching
             ).count()
         payment_percent_change = 100
-        if previous_payment > 0 or previous_payment is not None:
+        if previous_payment > 0 and previous_payment is not None:
             payment_percent_change = (
                 current_payment-previous_payment)/previous_payment
         payment_change_type = "increase"
@@ -170,10 +170,10 @@ class DashboardView(APIView):
         ).values_list("amount", flat=True)
         income_percent_change = 100
         expense_percent_change = 100
-        if previous_income > 0 or previous_income is not None:
+        if previous_income > 0 and previous_income is not None:
             income_percent_change = (
                 total_income-previous_income)/previous_income
-        if previous_expenditure > 0 or previous_expenditure is not None:
+        if previous_expenditure > 0 and previous_expenditure is not None:
             expense_percent_change = (
                 total_expenditure-previous_expenditure)/previous_expenditure
         income_change_type = "increase"
