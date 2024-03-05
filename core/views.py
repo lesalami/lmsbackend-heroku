@@ -122,7 +122,7 @@ class DashboardView(APIView):
             student__is_active=True,
         ).values_list("student").count()
         student_percent_change = 100
-        if previous_students > 0 or previous_students is not None:
+        if previous_students > 0 and previous_students is not None:
             student_percent_change = (
                 total_students-previous_students)/previous_students
         male_students_count = StudentClass.objects.filter(
