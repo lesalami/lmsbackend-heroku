@@ -20,8 +20,9 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from core.models import (
     DatabaseActionLog,
-    StudentClass, TeacherClass,
-    Class, AcademicTerm,
+    StudentClass,
+    Staff,
+    Class, AcademicYear,
     OrganizationDocument,
     OrganizationConfig,
     Payment
@@ -39,6 +40,7 @@ from finance.models import (
 )
 from finance.serializers import IncomeSerializer, ExpenditureSerializer
 from utils.pagination import StandardResultsSetPagination
+from core.utils import StaffType
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +64,7 @@ class DashboardView(APIView):
                 "students": {
                     "total": 0,
                     "male": 0,
-                    "femaale": 0,
+                    "female": 0,
                     "change": "100%",
                     "change_type": "increase"
                 },
@@ -91,33 +93,33 @@ class DashboardView(APIView):
         """Data for initial dashboard"""
         # Miscellaneous
         user = UserSerializer(instance=request.user).data
-        current_term = AcademicTerm.objects.get(is_active=True)
-        current_classes = Class.objects.filter(
-            academic_term=current_term
-        )
+        current_year = AcademicYear.objects.get(is_active=True)
+        # current_classes = Class.objects.filter(
+        #     academic_year=current_year
+        # )
         current_payment = Payment.objects.filter(
-            academic_term=current_term
+            academic_year=current_year
         ).aggregate(Sum("amount")).get("amount__sum")
         previous_classes = []
         previous_income = 0
         previous_expenditure = 0
         previous_payment = 0
-        if current_term.previous:
+        if current_year.previous:
             previous_classes = Class.objects.filter(
-                academic_term=current_term.previous
+                academic_year=current_year.previous
             )
             previous_income = Income.objects.filter(
-                academic_term=current_term.previous
+                academic_year=current_year.previous
             ).aggregate(Sum("amount")).get("amount__sum")
             previous_expenditure = Expenditure.objects.filter(
-                academic_term=current_term.previous
+                academic_year=current_year.previous
             ).aggregate(Sum("amount")).get("amount__sum")
             previous_payment = Payment.objects.filter(
-                academic_term=current_term.previous
+                academic_year=current_year.previous
             ).aggregate(Sum("amount")).get("amount__sum")
         # Students data
         total_students = StudentClass.objects.filter(
-            student_class__in=current_classes,
+            academic_year=current_year,
             student__is_active=True,
         ).values_list("student").count()
         previous_students = StudentClass.objects.filter(
@@ -128,12 +130,12 @@ class DashboardView(APIView):
             student_percent_change = (
                 total_students-previous_students)/previous_students
         male_students_count = StudentClass.objects.filter(
-            student_class__in=current_classes,
+            academic_year=current_year,
             student__is_active=True,
             student__gender="Male",
         ).values_list("student").count()
         female_students_count = StudentClass.objects.filter(
-            student_class__in=current_classes,
+            academic_year=current_year,
             student__is_active=True,
             student__gender="Female",
         ).values_list("student").count()
@@ -141,19 +143,12 @@ class DashboardView(APIView):
         if student_percent_change < 0:
             student_change_type = "decrease"
         # Teacher data
-        total_teachers = len(set(TeacherClass.objects.filter(
-            teacher_class__in=current_classes
-        ).values_list("teacher")))
-        previous_teachers = len(set(TeacherClass.objects.filter(
-            teacher_class__in=previous_classes
-        ).values_list("teacher")))
-        teacher_percent_change = 100
-        if previous_teachers != 0:
-            teacher_percent_change = (
-                total_teachers-previous_teachers)/previous_teachers
-        teacher_change_type = "increase"
-        if teacher_percent_change < 0:
-            teacher_change_type = "decrease"
+        total_teachers = Staff.objects.filter(
+            is_active=True, staff_type=StaffType.Teaching
+            ).count()
+        total_teachers_non = Staff.objects.filter(
+            is_active=True, staff_type=StaffType.Non_Teaching
+            ).count()
         payment_percent_change = 100
         if previous_payment != 0:
             payment_percent_change = (
@@ -168,9 +163,7 @@ class DashboardView(APIView):
         recent_serialzed = DatabaseActionSerializer(
             instance=recent_activity, many=True).data
         # Classes data
-        class_obj = Class.objects.filter(
-            academic_year__is_active=True
-        )
+        class_obj = Class.objects.all()
         class_data = ClassSerializer(instance=class_obj, many=True).data
         # Transaction summary
         total_expenditure = Expenditure.objects.filter(
@@ -195,10 +188,10 @@ class DashboardView(APIView):
             expense_change_type = "decrease"
         # Recent transactions
         recent_income = Income.objects.filter(
-            academic_term__is_active=True
+            academic_year__is_active=True
         ).order_by("-date_created")[:5]
         recent_expense = Expenditure.objects.filter(
-            academic_term__is_active=True
+            academic_year__is_active=True
         ).order_by("-date_created")[:5]
         monthly_payment = Payment.objects.filter(
             date_created__year=datetime.now().year,
@@ -229,14 +222,13 @@ class DashboardView(APIView):
                 "students": {
                      "total": total_students,
                      "male": male_students_count,
-                     "femaale": female_students_count,
+                     "female": female_students_count,
                      "change": str(abs(student_percent_change)) + "%",
                      "change_type": student_change_type
                 },
                 "teachers": {
-                    "total": total_teachers,
-                    "change": str(abs(teacher_percent_change)) + "%",
-                    "change_type": teacher_change_type
+                    "total_teachers": total_teachers,
+                    "total_non_teaching_staff": total_teachers_non,
                 },
                 "transactions": {
                     "total_expenditure": sum(total_expenditure),
@@ -268,7 +260,7 @@ class DashboardView(APIView):
                         ).data,
                     "payment": PaymentSerializer(
                         instance=Payment.objects.filter(
-                            academic_term__is_active=True
+                            academic_year__is_active=True
                         ).order_by("-date_created")[:5],
                         many=True
                         ).data
