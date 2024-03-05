@@ -100,14 +100,13 @@ class DashboardView(APIView):
         current_payment = Payment.objects.filter(
             academic_year=current_year
         ).aggregate(Sum("amount")).get("amount__sum")
-        previous_classes = []
         previous_income = 0
         previous_expenditure = 0
         previous_payment = 0
         if current_year.previous:
-            previous_classes = Class.objects.filter(
+            previous_students = StudentClass.objects.filter(
                 academic_year=current_year.previous
-            )
+            ).values_list("student").count()
             previous_income = Income.objects.filter(
                 academic_year=current_year.previous
             ).aggregate(Sum("amount")).get("amount__sum")
@@ -121,9 +120,6 @@ class DashboardView(APIView):
         total_students = StudentClass.objects.filter(
             academic_year=current_year,
             student__is_active=True,
-        ).values_list("student").count()
-        previous_students = StudentClass.objects.filter(
-            student_class__in=previous_classes
         ).values_list("student").count()
         student_percent_change = 100
         if previous_students != 0:
