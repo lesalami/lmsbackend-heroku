@@ -100,9 +100,6 @@ class DashboardView(APIView):
         current_payment = Payment.objects.filter(
             academic_year=current_year
         ).aggregate(Sum("amount")).get("amount__sum")
-        previous_income = 0
-        previous_expenditure = 0
-        previous_payment = 0
         if current_year.previous:
             previous_students = StudentClass.objects.filter(
                 academic_year=current_year.previous
@@ -122,9 +119,11 @@ class DashboardView(APIView):
             student__is_active=True,
         ).values_list("student").count()
         student_percent_change = 100
-        if previous_students > 0 and previous_students is not None:
+        if previous_students is not None and previous_students > 0:
             student_percent_change = (
                 total_students-previous_students)/previous_students
+        else:
+            previous_students = 0
         male_students_count = StudentClass.objects.filter(
             academic_year=current_year,
             student__is_active=True,
@@ -149,6 +148,8 @@ class DashboardView(APIView):
         if previous_payment is not None and previous_payment > 0:
             payment_percent_change = (
                 current_payment-previous_payment)/previous_payment
+        else:
+            previous_payment = 0
         payment_change_type = "increase"
         if payment_percent_change < 0:
             payment_change_type = "decrease"
@@ -170,12 +171,16 @@ class DashboardView(APIView):
         ).values_list("amount", flat=True)
         income_percent_change = 100
         expense_percent_change = 100
-        if previous_income > 0 and previous_income is not None:
+        if previous_income is not None and previous_income > 0:
             income_percent_change = (
                 total_income-previous_income)/previous_income
-        if previous_expenditure > 0 and previous_expenditure is not None:
+        else:
+            previous_income = 0
+        if previous_expenditure is not None and previous_expenditure > 0:
             expense_percent_change = (
                 total_expenditure-previous_expenditure)/previous_expenditure
+        else:
+            previous_expenditure = 0
         income_change_type = "increase"
         expense_change_type = "increase"
         if income_percent_change < 0:
