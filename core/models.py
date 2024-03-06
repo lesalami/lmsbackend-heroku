@@ -548,7 +548,7 @@ class Payment(models.Model):
     def save(self, *args, **kwargs):
         # Calculate the new balance after the payment
         if self.fee.amount < self.amount:
-            return "Payment amount is greater than the fee amount"
+            raise ValidationError("Payment amount is greater than the fee amount")
         print(hasattr(self.student, "studentclass_object"))
         totalassigned = self.student.studentclass_object.fee_assigned.fees.all(
 
