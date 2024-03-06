@@ -522,49 +522,55 @@ class PaymentView(viewsets.ModelViewSet):
                     status=status.HTTP_200_OK
                 )
             except PaymentReceipt.DoesNotExist:
-                receipt_number = str(payment_data.id).replace("-", "")
-                data_dict = {
-                    "organization_name": org.name,
-                    "organization_address": org.address,
-                    "payer": payment_data.student.__str__(),
-                    "date": payment_data.date_created.strftime("%d-%m-%Y"),
-                    "receipt_number": receipt_number[:8],
-                    "client_reference": payment_data.student,
-                    "description": f"Payment for {payment_data.fee.name}",
-                    "income_amount": payment_data.amount,
-                    "payment_time": payment_data.date_created.strftime(
-                        "%I:%M %p"
+                try:
+                    receipt_number = str(payment_data.id).replace("-", "")
+                    data_dict = {
+                        "organization_name": org.name,
+                        "organization_address": org.address,
+                        "payer": payment_data.student.__str__(),
+                        "date": payment_data.date_created.strftime("%d-%m-%Y"),
+                        "receipt_number": receipt_number[:8],
+                        "client_reference": payment_data.student,
+                        "description": f"Payment for {payment_data.fee.name}",
+                        "income_amount": payment_data.amount,
+                        "payment_time": payment_data.date_created.strftime(
+                            "%I:%M %p"
+                            )
+                    }
+                    pdf = convert_html_to_pdf(
+                        data_dict, "receipt.html", f'{receipt_number}.pdf'
                         )
-                }
-                pdf = convert_html_to_pdf(
-                    data_dict, "receipt.html", f'{receipt_number}.pdf'
-                    )
-                if pdf:
-                    receipt = PaymentReceipt.objects.create(
-                        payment=payment_data,
-                        receipt_number=receipt_number[:8],
-                        purpose=f"Payment for {payment_data.fee.name}"
-                    )
-                    # receipt_file = ""
-                    f = open(f'{receipt_number}.pdf', 'rb')
-                    receipt.file.save(
-                        name=f'{receipt_number}.pdf',
-                        content=File(f), save=True
+                    if pdf:
+                        receipt = PaymentReceipt.objects.create(
+                            payment=payment_data,
+                            receipt_number=receipt_number[:8],
+                            purpose=f"Payment for {payment_data.fee.name}"
                         )
-                    receipt.save()
-                    result = PaymentReceiptSerializer(
-                        instance=receipt, context={"request": request}
+                        # receipt_file = ""
+                        f = open(f'{receipt_number}.pdf', 'rb')
+                        receipt.file.save(
+                            name=f'{receipt_number}.pdf',
+                            content=File(f), save=True
+                            )
+                        receipt.save()
+                        result = PaymentReceiptSerializer(
+                            instance=receipt, context={"request": request}
+                            )
+                        os.remove(f'{receipt_number}.pdf')
+                        return Response(
+                            result.data,
+                            status=status.HTTP_200_OK
                         )
-                    os.remove(f'{receipt_number}.pdf')
+                    else:
+                        return Response(
+                            {"message": "Receipt generation faile"},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                except Exception as pay_except1:
                     return Response(
-                        result.data,
-                        status=status.HTTP_200_OK
-                    )
-                else:
-                    return Response(
-                        {"message": "Receipt generation faile"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                        {"message": pay_except1.__str__()}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as pay_except:
+                return Response({"message": pay_except.__str__()}, status=status.HTTP_400_BAD_REQUEST)
         else:
             return Response(
                 {"message": "Payment not found"},
