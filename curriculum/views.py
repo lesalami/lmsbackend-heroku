@@ -204,7 +204,7 @@ class StudentView(viewsets.ModelViewSet):
         try:
             student_class = StudentClass.objects.get(
                 student=self.get_object(),
-                student_class__academic_year__is_active=True
+                academic_year__is_active=True
             )
             if student_class.fee_assigned:
                 fees = student_class.fee_assigned.fees.all()
