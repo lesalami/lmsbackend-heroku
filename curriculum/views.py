@@ -4,6 +4,7 @@ Views for the Curriculum API.
 import os
 from datetime import datetime, timedelta
 from django.core.files import File
+from django.core.exceptions import ValidationError
 from django.db.models import Sum, Case, When, Value, IntegerField
 import logging
 from rest_framework import (
@@ -427,6 +428,13 @@ class StudentClassView(viewsets.ModelViewSet):
             )
         return super().get_permissions()
 
+    def handle_exception(self, exc):
+        if isinstance(exc, ValidationError):
+            return Response(
+                {"message": exc.message, "error_message": "Validation Error"},
+                status=status.HTTP_400_BAD_REQUEST)
+        return super().handle_exception(exc)
+
 
 class TeacherClassView(viewsets.ModelViewSet):
     """API View for the teacher to class mapping"""
@@ -456,6 +464,13 @@ class PaymentView(viewsets.ModelViewSet):
         academic_year__is_active=True
     )
     http_method_names = ["get", "post"]
+
+    def handle_exception(self, exc):
+        if isinstance(exc, ValidationError):
+            return Response(
+                {"message": exc.message, "error_message": "Validation Error"},
+                status=status.HTTP_400_BAD_REQUEST)
+        return super().handle_exception(exc)
 
     @action(
             detail=False, methods=["get"],
