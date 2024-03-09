@@ -100,6 +100,10 @@ class DashboardView(APIView):
         current_payment = Payment.objects.filter(
             academic_year=current_year
         ).aggregate(Sum("amount")).get("amount__sum")
+        previous_students = 0
+        previous_payment = 0
+        previous_income = 0
+        previous_expenditure = 0
         if current_year.previous:
             previous_students = StudentClass.objects.filter(
                 academic_year=current_year.previous
