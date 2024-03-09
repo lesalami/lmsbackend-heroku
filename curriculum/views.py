@@ -44,6 +44,8 @@ from utils.pagination import StandardResultsSetPagination
 from utils.pdf_generate import convert_html_to_pdf
 from core.utils import StaffType
 from utils.custom_permissions import SchoolAdmin
+from utils.fee_payment import fee_payment_breakdown, payment_aggregate
+from utils.utils import generate_random_receipt_number
 
 
 logger = logging.getLogger(__name__)
@@ -248,9 +250,9 @@ class StudentView(viewsets.ModelViewSet):
                     {"message": "Student does not have a fee assignment"},
                     status=status.HTTP_404_NOT_FOUND
                 )
-        except StudentClass.DoesNotExist:
+        except Exception as pay_except:
             return Response(
-                {"message": "Student does not have a class assignment"},
+                {"message": pay_except.__str__()},
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -538,22 +540,34 @@ class PaymentView(viewsets.ModelViewSet):
                 )
             except PaymentReceipt.DoesNotExist:
                 try:
-                    receipt_number = str(payment_data.id).replace("-", "")
+                    all_payments = fee_payment_breakdown(payment_data.student.id)
+                    amount_assigned, amount_paid, amount_owing = payment_aggregate(
+                        payment_data.student.id
+                    )
+                    receipt_number = generate_random_receipt_number()
                     data_dict = {
                         "organization_name": org.name,
-                        "organization_address": org.address,
+                        "organization_address": "" if org.address is None else org.address,
+                        "organization_contact": "" if org.contact_number is None else org.contact_number,
+                        "cashier_name": payment_data.user.__str__(),
+                        "payment_mode": "" if payment_data.payment_method is None else payment_data.payment_method,
+                        "cheque_number": "" if payment_data.cheque_number is None else payment_data.cheque_number,
                         "payer": payment_data.student.__str__(),
                         "date": payment_data.date_created.strftime("%d-%m-%Y"),
                         "receipt_number": receipt_number[:8],
-                        "client_reference": payment_data.student,
+                        "client_reference": payment_data.student.__str__(),
                         "description": f"Payment for {payment_data.fee.name}",
                         "income_amount": payment_data.amount,
                         "payment_time": payment_data.date_created.strftime(
                             "%I:%M %p"
-                            )
+                            ),
+                        "payment_breakdown": all_payments,
+                        "total_amount_assigned": amount_assigned,
+                        "total_amount_paid": amount_paid,
+                        "total_amount_owing": amount_owing
                     }
                     pdf = convert_html_to_pdf(
-                        data_dict, "receipt.html", f'{receipt_number}.pdf'
+                        data_dict, "fee_receipt.html", f'{receipt_number}.pdf'
                         )
                     if pdf:
                         receipt = PaymentReceipt.objects.create(
