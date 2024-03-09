@@ -3,7 +3,7 @@ Create an initial data for students
 """
 import random
 # import string
-from faker import Faker
+# from faker import Faker
 from datetime import datetime
 from typing import Optional, Any
 from django.core.management.base import BaseCommand, CommandParser
@@ -12,9 +12,12 @@ import openpyxl
 
 from core.models import (
     Student, Class, AcademicYear,
-    AcademicTerm, StudentClass
+    AcademicTerm, StudentClass,
+    StudentFeeGroup,
+    Fee
     # User
 )
+from utils.utils import generate_random_string, get_initials
 
 
 class Command(BaseCommand):
@@ -25,102 +28,125 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **options: Any) -> Optional[str]:
         """Create students and Classes/levels, then add students"""
-        acad_year, created = AcademicYear.objects.get_or_create(
-            year=f"{datetime.now().year} - {datetime.now().year+1}"
-        )
-        acad_term, created = AcademicTerm.objects.get_or_create(
-            academic_year=acad_year,
-            term="First Term"
-        )
 
-        blood_grps = ["A+", "AB+", "B+", "O+", "A-", "B-", "AB-", "O-"]
+        student_dict, fee_group = extract_excel_data()
+        for class_name, students in student_dict.items():
+            for row in students:
+                acad_year, _ = AcademicYear.objects.get_or_create(
+                    year=row["academic_year"]
+                )
+                acad_term, _ = AcademicTerm.objects.get_or_create(
+                    academic_year=acad_year,
+                    term="First Term"
+                )
+                my_class, _ = Class.objects.get_or_create(
+                    name=class_name
+                )
+                middle_name = ""
+                if row["middle_name"] is None:
+                    middle_name = ""
+                studentID = generate_random_string(length=8) + get_initials(
+                        row["first_name"], middle_name, row["last_name"]
+                )
 
-        class_list = ["creche", "nursery", "kindergarten", "basic", "jhs"]
-        dataframe = openpyxl.load_workbook("HHA_Students_Enrolment.xlsx")
-
-        name_list = dataframe.sheetnames
-        # dataframe1 = dataframe[name_list[9]]
-        for name in name_list:
-            dataframe1 = dataframe[name_list[name_list.index(name)]]
-            my_class, created = Class.objects.get_or_create(
-                        name=name,
-                        academic_year=acad_year,
-                        academic_term=acad_term
+                try:
+                    student = Student.objects.get(
+                        first_name=row["first_name"],
+                        last_name=row["last_name"],
+                        middle_name=middle_name
                     )
+                except Student.DoesNotExist:
+                    try:
+                        student = Student.objects.create(
+                            student_id=studentID,
+                            gender=random.choice(["Male", "Female"]),
+                            first_name=row["first_name"],
+                            last_name=row["last_name"],
+                            middle_name=middle_name,
+                            date_of_birth=row["date_of_birth"],
+                            date_of_admission=row["date_of_admission"],
+                            blood_type=row["blood_group"]
+                        )
+                    except IntegrityError:
+                        studentID = generate_random_string(length=8) + get_initials(
+                                row["first_name"], middle_name, row["last_name"]
+                        ) + str(datetime.today().year)
+                        student = Student.objects.create(
+                            student_id=studentID,
+                            gender=random.choice(["Male", "Female"]),
+                            first_name=row["first_name"],
+                            last_name=row["last_name"],
+                            middle_name=middle_name,
+                            date_of_birth=row["date_of_birth"],
+                            date_of_admission=row["date_of_admission"],
+                            blood_type=row["blood_group"]
+                        )
 
-            for row in range(0, dataframe1.max_row):
-                for col in dataframe1.iter_cols(1, dataframe1.max_column):
-                    # print(type(col[row].value), col[row].value)
-                    if col[row].value is not None:
-                        if not any(
-                            s in col[row].value.lower() for s in class_list
-                                ):
-                            # print(col[row].value)
-                            fake = Faker()
-                            dob = fake.date_of_birth()
-                            student_name = col[row].value.capitalize()
-                            date_of_admission = fake.date()
-                            [middle_name] = [
-                                " ".join(
-                                    student_name.split()[1:-1]
-                                ).capitalize(
-                                ) if len(student_name.split()) > 2 else ""
-                                ]
-                            studentID = "HHA_" + "".join(next(zip(
-                                *student_name.split()
-                                ))).upper() + str(
-                                datetime.strptime(
-                                    date_of_admission, "%Y-%m-%d"
-                                ).strftime("%Y")
-                                )
-                            try:
-                                student = Student.objects.get(
-                                    first_name=student_name.split()[-1],
-                                    last_name=student_name.split()[0],
-                                    middle_name=middle_name
-                                )
-                            except Student.DoesNotExist:
-                                try:
-                                    student = Student.objects.create(
-                                        student_id=studentID,
-                                        gender=random.choice(["Male", "Female"]),
-                                        first_name=student_name.split(
-                                        )[-1].capitalize(),
-                                        last_name=student_name.split(
-                                        )[0].capitalize(),
-                                        middle_name=middle_name,
-                                        date_of_birth=dob,
-                                        date_of_admission=date_of_admission,
-                                        blood_type=random.choice(blood_grps)
-                                    )
-                                except IntegrityError:
-                                    studentID = "HHA_02" + "".join(next(zip(
-                                        *student_name.split()
-                                        ))).upper() + str(
-                                        datetime.strptime(
-                                            date_of_admission, "%Y-%m-%d"
-                                        ).strftime("%Y")
-                                        )
-                                    student = Student.objects.create(
-                                        student_id=studentID,
-                                        gender=random.choice(["Male", "Female"]),
-                                        first_name=student_name.split(
-                                        )[-1].capitalize(),
-                                        last_name=student_name.split(
-                                        )[0].capitalize(),
-                                        middle_name=middle_name,
-                                        date_of_birth=dob,
-                                        date_of_admission=date_of_admission,
-                                        blood_type=random.choice(blood_grps)
-                                    )
-
-                            student_class, created = StudentClass.objects.get_or_create(
-                                student=student,
-                                student_class=my_class
-                            )
-                            # print(f"{student} in {student_class}")
+                for item in fee_group:
+                    fee_obj, _ = Fee.objects.get_or_create(
+                            academic_year=acad_year,
+                            academic_term=acad_term,
+                            amount=item["amount"],
+                            name=item["fees included"]
+                        )
+                    fee_group_obj, _ = StudentFeeGroup.objects.get_or_create(
+                        name=item["fee group name"]
+                    )
+                    fee_group_obj.fees.add(fee_obj)
+                student_fee_assigned = None
+                if row["fee_group"] is not None or row["fee_group"] != "":
+                    student_fee_assigned, _ = StudentFeeGroup.objects.get_or_create(
+                        name__icontains=row["fee_group"]
+                    )
+                student_class, _ = StudentClass.objects.get_or_create(
+                    student=student,
+                    academic_year=acad_year,
+                    student_class=my_class,
+                    fee_assigned=student_fee_assigned
+                )
         self.stdout.write(
                 self.style.SUCCESS(
                     'Successfully created Students'
                     )
                 )
+
+
+def extract_excel_data(filename: str = "Updated HHA Enr.xlsx"):
+    """Extract data from excel into json"""
+    final_dict = {}
+    fee_group_dict = {}
+    dataframe = openpyxl.load_workbook(filename)
+
+    name_list = dataframe.sheetnames
+    for sheet_name in name_list:
+        if sheet_name == "Fee Group":
+            fee_sheet = dataframe[sheet_name]
+            fee_headers = [cell.value.lower() for cell in fee_sheet[1]]
+            fee_sheet_data = []
+            for fee_row in fee_sheet.iter_rows(min_row=2, values_only=True):
+                if all(ff is None for ff in fee_row):
+                    pass
+                else:
+                    if not any(
+                        sub in fr for fr in fee_row for sub in name_list if fr is not None
+                        if type(fr) == str
+                            ):
+                        row_dict = dict(zip(fee_headers, fee_row))
+                        fee_sheet_data.append(row_dict)
+            fee_group_dict = fee_sheet_data
+        else:
+            sheet = dataframe[sheet_name]
+            headers = [cell.value.lower() for cell in sheet[1]]
+            sheet_data = []
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                if all(ff is None for ff in row):
+                    pass
+                else:
+                    if not any(
+                        sub in fr for fr in row for sub in name_list if fr is not None
+                        if type(fr) == str
+                            ):
+                        row_dict = dict(zip(headers, row))
+                        sheet_data.append(row_dict)
+            final_dict[sheet_name] = sheet_data
+    return final_dict, fee_group_dict
