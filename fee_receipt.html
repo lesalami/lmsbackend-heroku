@@ -1,0 +1,242 @@
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta http-equiv="Content-Style-Type" content="text/css" />
+    <meta name="generator" content="Aspose.Words for .NET 23.12.0" />
+    <title>Salcon Receipt</title>
+    <style type="text/css">
+      body {
+        font-family: "Times New Roman";
+        margin: 0;
+      }
+
+      h3 {
+        margin: 0;
+      }
+
+      .container {
+        max-width: 1024px;
+        min-height: 100vh;
+        padding: 0 3rem;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .addresses {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10rem;
+        margin: 2.5rem 0;
+      }
+
+      #business_details {
+        width: 100%;
+        border: 1px;
+        margin-right: 10px;
+        display: inline-block;
+        font-family: "Calibri", sans-serif;
+        font-size: medium;
+        font-style: italic;
+      }
+
+      #business_details > div {
+        padding: 0.25rem 0;
+      }
+
+      #business_details > h3 {
+        font-weight: 600;
+        font-style: normal;
+        margin: 0 0 1rem 0;
+      }
+
+      #business_details > h3.buyer_name {
+        margin: 0 0 0.5rem 0;
+      }
+
+      .metadata {
+        width: 100%;
+        background-color: #f9f9f9;
+        padding: 1.5rem;
+        font-size: medium;
+      }
+
+      .metadata > .item {
+        display: flex;
+        justify-content: space-between;
+        margin: 0.5rem;
+      }
+
+      table {
+        font-family: arial, sans-serif;
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      td,
+      th {
+        border-bottom: 1px solid #dddddd;
+        text-align: left;
+        padding: 16px;
+      }
+
+      tr:nth-child(even) {
+        background-color: #dddddd;
+      }
+
+      .total-amount {
+        display: flex;
+        padding: 3rem 1rem 1rem 1rem;
+        gap: 3rem;
+      }
+
+      .total-amount > .info {
+        display: flex;
+        gap: 0.50rem;
+        font-size: small;
+        font-weight: 100;
+        color: #23c6b9;
+        margin-bottom: 10rem;
+      }
+
+      .footer {
+        border-top: 2px gray solid;
+        padding: 1rem 0;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .footer__item {
+        font-family: "Calibri", sans-serif;
+        font-size: small;
+      }
+
+      .footer__item > h3 {
+        margin-bottom: 0.5rem;
+      }
+
+      .footer__item > div {
+        margin-bottom: 0.5rem;
+        font-size: small;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <div>
+        <p style="text-align: center; line-height: 48pt">
+          <span
+            style="
+              color: #23c6b9;
+              font-family: Verdana, Geneva, Tahoma, sans-serif;
+              font-size: 32pt;
+            "
+          >
+          <img style="height: 54px" src="https://webappstatic.s3.eu-west-1.amazonaws.com/favicon.png" />
+          </span>
+        </p>
+        <hr color="#23c6b9" size="4" />
+
+        <div class="addresses">
+          <div width="100%" style="width: 100%">
+            <div id="business_details">
+                <h3>{{ organization_name }}</h3>
+                <div>{{ organization_address }}</div>
+                <div>P. O. Box AF3235, Madina-Accra</div>
+                <div>Phone: {{ organization_contact }}</div>
+            </div>
+            <div width="100%" style="margin-top: 48pt">
+                <div id="business_details">
+                  <h6>To</h6>
+                  <div>{{ payer }}</div>
+                  {% if payer_address %}
+                  <div>{{ payer_address }}</div>
+                  {% else %}
+                  <div>Accra</div>
+                  {% endif %}
+                </div>
+            </div>
+          </div>
+          <div class="metadata">
+            <div class="item">
+              <span style="">Payment Date: </span>
+              <span style="float: right">{{ date }}</span>
+            </div>
+            <div class="item">
+              <span style="">Payment Time: </span>
+              <span style="float: right">{{ payment_time }}</span>
+            </div>
+            <div class="item">
+                <span style="">Cashier Name: </span>
+                <span style="float: right">{{ cashier_name }}</span>
+              </div>
+            <div class="item">
+            </div>
+            <div class="item">
+                <span style="">Payment Mode: </span>
+                <span style="float: right">{{ payment_mode }}</span>
+              </div>
+            <div class="item">
+            </div>
+            <div class="item">
+                <span style="">Cheque Number: </span>
+                <span style="float: right">{{ cheque_number }}</span>
+              </div>
+            <div class="item">
+            </div>
+            <div class="item">
+              <span style="">Client Reference: </span>
+              <span style="float: right">{{ client_reference }}</span>
+            </div>
+            <div class="item">
+              <span style="">Receipt Number: </span>
+              <span style="float: right">{{ receipt_number }}</span>
+            </div>
+          </div>
+        </div>
+
+        <hr color="#23c6b9" size="4" width="100%" />
+
+        <div>
+          <table>
+            <tr>
+              <thead>
+                <th>Fee Type</th>
+                <th>Fee Amount</th>
+                <th>Amount Paid</th>
+                <th>Balance</th>
+              </thead>
+            </tr>
+            <tbody>
+                {%  for payment in payment_breakdown%}
+              <tr>
+                <td style="width: 50%">{{ payment.fee_name }}</td>
+                <td>GHS {{ payment.fee_amount }}</td>
+                <td>GHS {{ payment.amount_paid }}</td>
+                <td>GHS {{ payment.amount_owing }}</td>
+              </tr>
+              {% endfor %}
+              <tfoot>
+                <tr style="font-weight: bold;">
+                    <td >Total</td>
+                    <td>GHS {{ total_amount_assigned }}</td>
+                    <td>GHS {{ total_amount_paid }}</td>
+                    <td>GHS {{ total_amount_owing }}</td>
+                  </tr>
+                </tfoot>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="footer">
+        <div class="">
+          <h3>Higher Heights Academy</h3>
+          <div>{{ organization_address }} | Phone: {{ organization_contact }}</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
