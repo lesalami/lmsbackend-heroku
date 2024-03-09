@@ -34,7 +34,6 @@ def convert_html_to_pdf(
       body {
         font-family: "Times New Roman";
         margin: 0;
-        font-size: 10rem;
       }
 
       h3 {
@@ -115,24 +114,24 @@ def convert_html_to_pdf(
 
       .total-amount {
         display: flex;
-        justify-content: flex-end;
-        padding: 1rem 4rem;
+        padding: 3rem 1rem 1rem 1rem;
+        gap: 3rem;
       }
 
       .total-amount > .info {
         display: flex;
-        gap: 2.5rem;
-        font-size: medium;
-        font-weight: 300;
+        gap: 0.50rem;
+        font-size: small;
+        font-weight: 100;
         color: #23c6b9;
-        margin-bottom: 15rem;
+        margin-bottom: 10rem;
       }
 
       .footer {
         border-top: 2px gray solid;
         padding: 1rem 0;
-        text-align: center;
-        bottom: -50cm;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
       }
 
       .footer__item {

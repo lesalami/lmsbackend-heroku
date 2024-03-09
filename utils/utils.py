@@ -25,6 +25,15 @@ def generate_random_string(length=15):
     return random_string
 
 
+def generate_random_receipt_number(length=10):
+    """Generating receipt number"""
+
+    chars = string.digits
+
+    random_string = "".join(secrets.choice(chars) for _ in range(length))
+    return random_string
+
+
 # @receiver(post_save, sender=Payment)
 # def update_income(sender, instance, **kwargs):
 #     """The payment object records an instance on the Income table"""
