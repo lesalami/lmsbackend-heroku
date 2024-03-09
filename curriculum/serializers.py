@@ -633,6 +633,7 @@ class PaymentSerializer(serializers.ModelSerializer):
     academic_year_obj = serializers.SerializerMethodField()
     academic_term_obj = serializers.SerializerMethodField()
     fee_obj = serializers.SerializerMethodField()
+    cheque_number = serializers.CharField(required=False)
 
     def get_student_obj(self, instance):
         if instance.student:
