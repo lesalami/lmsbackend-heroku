@@ -96,6 +96,7 @@ class OrganizationConfig(models.Model):
     currency = models.CharField(
         max_length=150, default="GHC"
     )
+    contact_number = models.CharField(max_length=250, null=True, blank=True)
     ssnit_rate = models.DecimalField(
         max_digits=10, decimal_places=2,
         validators=[MinValueValidator(0)],
@@ -146,6 +147,15 @@ class User(AbstractBaseUser, PermissionsMixin):
     objects = UserManager()
 
     USERNAME_FIELD = "email"
+
+    def __str__(self):
+        returned_name = self.email
+        if self.first_name:
+            if self.last_name:
+                returned_name = f"{self.first_name} {self.last_name}"
+            else:
+                returned_name = f"{self.first_name}"
+        return returned_name
 
 
 class AcademicYear(models.Model):
@@ -478,6 +488,14 @@ class StudentClass(models.Model):
 
     def save(self, *args, **kwargs):
         # Calculate the new owing after the payment
+        fee_owing_from_previous_year = 0
+        if self.academic_year.previous:
+            "Check if student has an outstanding fee"
+            previous_fee = self.__class__.objects.get(
+                student=self.student, academic_year=self.academic_year.previous
+                )
+            if previous_fee.fee_owing:
+                fee_owing_from_previous_year = previous_fee.fee_owing
         if self.fee_assigned:
             total_fees_assigned = self.fee_assigned.fees.all().aggregate(
                 models.Sum("amount")
@@ -487,7 +505,8 @@ class StudentClass(models.Model):
                     message="Payment amount is greater than the fee amount",
                     code="payment_error",
                 )
-            self.fee_owing = total_fees_assigned["amount__sum"] - self.fee_paid
+            current_fee_owing = total_fees_assigned["amount__sum"] - self.fee_paid
+            self.fee_owing = current_fee_owing + fee_owing_from_previous_year
             if self.fee_paid < total_fees_assigned["amount__sum"]:
                 self.owing = True
             else:
