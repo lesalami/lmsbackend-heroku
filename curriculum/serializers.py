@@ -668,7 +668,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             "fee", "amount", "owing_after_payment",
             "academic_term_obj", "academic_year_obj",
             "student_obj", "fee_obj",
-            "payment_method"
+            "payment_method", "cheque_number"
         ]
         read_only_fields = ["id", "date_created", "last_modified"]
 
