@@ -545,16 +545,19 @@ class PaymentView(viewsets.ModelViewSet):
                         payment_data.student.id
                     )
                     receipt_number = generate_random_receipt_number()
+                    cheque_no = ""
+                    if payment_data.cheque_number:
+                        cheque_no = payment_data.cheque
                     data_dict = {
                         "organization_name": org.name,
                         "organization_address": "" if org.address is None else org.address,
                         "organization_contact": "" if org.contact_number is None else org.contact_number,
                         "cashier_name": payment_data.user.__str__(),
                         "payment_mode": "" if payment_data.payment_method is None else payment_data.payment_method,
-                        "cheque_number": "" if payment_data.cheque_number is None else payment_data.cheque_number,
+                        "cheque_number": cheque_no,
                         "payer": payment_data.student.__str__(),
                         "date": payment_data.date_created.strftime("%d-%m-%Y"),
-                        "receipt_number": receipt_number[:8],
+                        "receipt_number": receipt_number,
                         "client_reference": payment_data.student.__str__(),
                         "description": f"Payment for {payment_data.fee.name}",
                         "income_amount": payment_data.amount,
