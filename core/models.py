@@ -209,6 +209,16 @@ class AcademicTerm(models.Model):
 
     def __str__(self):
         return self.term
+    
+    def validate_unique(self, *args, **kwargs):
+        super().validate_unique(*args, **kwargs)
+        if self.__class__.objects.filter(
+            is_active=True
+        ).exists() and not self.__class__.objects.filter(id=self.id).exists():
+            raise ValidationError(
+                message='An Academic term is active. Kindly Deactivate',
+                code='unique_together',
+            )
 
 
 class OrganizationDocument(models.Model):
