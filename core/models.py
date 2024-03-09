@@ -209,7 +209,7 @@ class AcademicTerm(models.Model):
 
     def __str__(self):
         return self.term
-    
+
     def validate_unique(self, *args, **kwargs):
         super().validate_unique(*args, **kwargs)
         if self.__class__.objects.filter(
@@ -570,6 +570,7 @@ class Payment(models.Model):
         max_length=200, choices=PaymentMethods,
         default="Bank"
     )
+    cheque_number = models.CharField(max_length=250, null=True, blank=True)
 
     def __str__(self):
         return f"Payment for {self.student}"
