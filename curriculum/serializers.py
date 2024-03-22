@@ -752,7 +752,7 @@ class ArrearPaymentSerializer(BaseModelSerializer):
             "fee_arrear", "amount", "owing_after_payment",
             "payment_method", "cheque_number"
         ]
-    
+
     def create(self, validated_data):
         user = self.context.get("request").user
         validated_data["user"] = user
