@@ -120,6 +120,16 @@ class PaymentAdmin(admin.ModelAdmin):
         ]
 
 
+class FeeArrearAdmin(admin.ModelAdmin):
+    """Model Admin view for the fee arrear"""
+    readonly_fields = ("arrear_balance", )
+
+
+class ArrearPaymentAdmin(admin.ModelAdmin):
+    """Admin view for the arrear payment"""
+    readonly_fields = ("owing_after_payment", )
+
+
 admin.site.register(models.OrganizationConfig)
 admin.site.register(models.Fee)
 admin.site.register(models.OrganizationDocument)
@@ -138,3 +148,5 @@ admin.site.register(models.StudentClass, StudentClassAdmin)
 admin.site.register(models.StudentFeeGroup)
 admin.site.register(models.Payment, PaymentAdmin)
 admin.site.register(models.PaymentReceipt)
+admin.site.register(models.FeeArrear, FeeArrearAdmin)
+admin.site.register(models.ArrearPayment, ArrearPaymentAdmin)

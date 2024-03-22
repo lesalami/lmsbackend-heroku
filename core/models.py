@@ -2,6 +2,7 @@
 All database models go here
 """
 from decimal import Decimal
+from typing import Collection
 from uuid import uuid4
 from django.db import models
 # from django.forms.models import model_to_dict
@@ -180,9 +181,8 @@ class AcademicYear(models.Model):
 
     def validate_unique(self, *args, **kwargs):
         super().validate_unique(*args, **kwargs)
-        if self.__class__.objects.filter(
-            is_active=True
-        ).exists() and not self.__class__.objects.filter(id=self.id).exists():
+        active_year = self.__class__.objects.filter(is_active=True)
+        if active_year.exists() and self.is_active and self not in active_year:
             raise ValidationError(
                 message='An Academic year is active. Kindly Deactivate',
                 code='unique_together',
@@ -212,9 +212,8 @@ class AcademicTerm(models.Model):
 
     def validate_unique(self, *args, **kwargs):
         super().validate_unique(*args, **kwargs)
-        if self.__class__.objects.filter(
-            is_active=True
-        ).exists() and not self.__class__.objects.filter(id=self.id).exists():
+        active_term = self.__class__.objects.filter(is_active=True)
+        if active_term.exists() and self.is_active and self not in active_term:
             raise ValidationError(
                 message='An Academic term is active. Kindly Deactivate',
                 code='unique_together',
@@ -538,6 +537,50 @@ class StudentClass(models.Model):
         ]
 
 
+class FeeArrear(models.Model):
+    """Student Fee Arrears from previous year"""
+    id = models.UUIDField(
+        primary_key=True,
+        unique=True, db_index=True,
+        default=uuid4, editable=False
+    )
+    date_created = models.DateTimeField(auto_now_add=True, db_index=True)
+    last_modified = models.DateTimeField(auto_now=True)
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE)
+    academic_term = models.ForeignKey(
+        AcademicTerm, on_delete=models.CASCADE, null=True,
+        blank=True
+        )
+    student = models.ForeignKey(Student, on_delete=models.CASCADE)
+    amount = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        validators=[MinValueValidator(0)],
+        default=Decimal(0.00)
+    )
+    arrear_balance = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        validators=[MinValueValidator(0)],
+        default=Decimal(0.00)
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student", "academic_year", "academic_term"],
+                name="unique_student_arrears"
+                )
+        ]
+
+    def validate_constraints(self, exclude: Collection[str] | None = ...) -> None:
+        super().validate_constraints(exclude)
+        if self.academic_term.is_active and self.academic_year.is_active:
+            raise ValidationError("Arrears cannot be in the active academic year/term")
+        elif not self.academic_term == AcademicTerm.objects.get(
+            is_active=True).previous or not self.academic_year == AcademicYear.objects.get(
+                is_active=True).previous:
+            raise ValidationError("Arrears must be for a previous academic year/term")
+
+
 class Payment(models.Model):
     """All payments for any service by students"""
     id = models.UUIDField(
@@ -597,6 +640,56 @@ class Payment(models.Model):
         super().save(*args, **kwargs)
 
 
+class ArrearPayment(models.Model):
+    """Payment model for the Arrears"""
+    id = models.UUIDField(
+        primary_key=True,
+        unique=True, db_index=True,
+        default=uuid4, editable=False
+    )
+    date_created = models.DateTimeField(auto_now_add=True, db_index=True)
+    last_modified = models.DateTimeField(auto_now=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    fee_arrear = models.ForeignKey(
+        FeeArrear, on_delete=models.CASCADE, related_name="student_arrear"
+        )
+    amount = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        validators=[MinValueValidator(0)],
+        default=Decimal(0.00)
+    )
+    owing_after_payment = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        validators=[MinValueValidator(0)],
+        default=Decimal(0.00)
+    )
+    payment_method = models.CharField(
+        max_length=200, choices=PaymentMethods,
+        default="Bank"
+    )
+    cheque_number = models.CharField(max_length=250, null=True, blank=True)
+
+    def __str__(self):
+        return f"Arrear Payment for {self.fee_arrear.student}"
+
+    def save(self, *args, **kwargs):
+        # Calculate the new balance after the payment
+        if self.fee_arrear.amount < self.amount:
+            raise ValidationError("Payment amount is greater than the arrear amount")
+
+        all_payments = self.__class__.objects.filter(
+            fee_arrear=self.fee_arrear
+            ).aggregate(models.Sum("amount"))
+        amount_paid = self.amount
+        if all_payments["amount__sum"]:
+            amount_paid = self.amount + all_payments["amount__sum"]
+        self.owing_after_payment = self.fee_arrear.amount - amount_paid
+
+        self.fee_arrear.arrear_balance = self.owing_after_payment
+        self.fee_arrear.save()
+        super().save(*args, **kwargs)
+
+
 class PaymentReceipt(models.Model):
     """Record of PDF receipts given out to payees, students, suppliers, etc"""
     id = models.UUIDField(
@@ -606,10 +699,17 @@ class PaymentReceipt(models.Model):
     )
     date_created = models.DateTimeField(auto_now_add=True, db_index=True)
     last_modified = models.DateTimeField(auto_now=True)
-    purpose = models.JSONField(null=True, blank=True)
+    purpose = models.TextField(null=True, blank=True)
+    details = models.JSONField(null=True, blank=True)
     file = models.FileField(upload_to="payments/receipts")
-    payment = models.ForeignKey(Payment, on_delete=models.CASCADE)
+    payment = models.ForeignKey(Payment, on_delete=models.CASCADE, null=True, blank=True)
+    arrear_payment = models.ForeignKey(ArrearPayment, on_delete=models.CASCADE, null=True, blank=True)
     receipt_number = models.CharField(max_length=100, unique=True)
+
+    def clean(self) -> None:
+        super().clean()
+        if not self.payment and not self.arrear_payment:
+            raise ValidationError("Either Payment or Arrear Payment must be set")
 
 
 class TeacherClass(models.Model):
