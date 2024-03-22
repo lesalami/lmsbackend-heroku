@@ -211,6 +211,7 @@
               </thead>
             </tr>
             <tbody>
+              {% if payment_breakdown %}
                 {%  for payment in payment_breakdown%}
               <tr>
                 <td style="width: 50%">{{ payment.fee_name }}</td>
@@ -219,6 +220,17 @@
                 <td>GHS {{ payment.amount_owing }}</td>
               </tr>
               {% endfor %}
+              {% endif %}
+              {% if fee_arrears_payment %}
+                {% for arrear in fee_arrears_payment %}
+                <tr>
+                  <td style="width: 50%">{{ arrear.arrear_type }}</td>
+                  <td>GHS {{ arrear.fee_amount }}</td>
+                  <td>GHS {{ arrear.amount_paid }}</td>
+                  <td>GHS {{ arrear.amount_owing }}</td>
+                </tr>
+                {% endfor %}
+              {% endif %}
               <tfoot>
                 <tr style="font-weight: bold;">
                     <td >Total</td>
