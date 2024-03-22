@@ -4,6 +4,7 @@ Views for the Curriculum API.
 import os
 from datetime import datetime, timedelta
 from django.core.files import File
+from django.http import Http404
 from django.core.exceptions import ValidationError
 from django.db.models import Sum, Case, When, Value, IntegerField
 import logging
@@ -30,21 +31,25 @@ from curriculum.serializers import (
     TeacherAssignmentSerializer, StudentClassSerializer,
     TeacherClassSerializer, FeeSerializer,
     StudentFeegroupSerializer, PaymentSerializer,
-    PaymentReceiptSerializer
+    PaymentReceiptSerializer, FeeArrearSerializer,
+    ArrearPaymentSerializer,
 )
 from core.models import (
     AcademicYear, Student, ParentOrGuardian,
     Staff, Subject, Class,
     AcademicTerm, TeacherAssignment, StudentClass,
     TeacherClass, Fee, StudentFeeGroup, Payment,
-    PaymentReceipt
+    PaymentReceipt, FeeArrear, ArrearPayment,
 )
 
 from utils.pagination import StandardResultsSetPagination
 from utils.pdf_generate import convert_html_to_pdf
 from core.utils import StaffType
 from utils.custom_permissions import SchoolAdmin
-from utils.fee_payment import fee_payment_breakdown, payment_aggregate
+from utils.fee_payment import (
+    fee_payment_breakdown, payment_aggregate,
+    arrears_payment_aggregate
+)
 from utils.utils import generate_random_receipt_number
 
 
@@ -523,9 +528,50 @@ class PaymentView(viewsets.ModelViewSet):
             url_path="receipt", url_name="receipt")
     def get_receipt(self, request, pk=None):
         """Generate and retun a PDF receipt given Payment ID"""
-        payment_data = self.get_object()
+        arrear_payment_map = []
+        receipt_number = generate_random_receipt_number()
+        try:
+            arrear_paid_obj = None
+            payment_data = self.get_object()
+            fee_arrears = FeeArrear.objects.filter(
+                student=payment_data.student,
+                arrear_balance__gt=0
+            )
+            for each_arrear in fee_arrears:
+                arrear_payment_map.append(
+                    {
+                        "arrear_type": "Arrears",
+                        "fee_amount": each_arrear.amount,
+                        "amount_paid": ArrearPayment.objects.filter(
+                            fee_arrear=each_arrear
+                            ).aggregate(Sum("amount"))["amount__sum"],
+                        "amount_owing": each_arrear.arrear_balance,
+                    }
+                )
+        except Http404:
+            arrear_paid_obj = ArrearPayment.objects.get(id=pk)
+            fee_arrears = FeeArrear.objects.filter(
+                student=arrear_paid_obj.fee_arrear.student,
+                arrear_balance__gt=0
+                )
+            for each_arrear in fee_arrears:
+                arrear_payment_map.append(
+                    {
+                        "arrear_type": "Arrears",
+                        "fee_amount": each_arrear.amount,
+                        "amount_paid": ArrearPayment.objects.filter(
+                            fee_arrear=each_arrear
+                            ).aggregate(Sum("amount"))["amount__sum"],
+                        "amount_owing": each_arrear.arrear_balance
+                    }
+                )
+            payment_data = self.queryset.filter(student=arrear_paid_obj.fee_arrear.student)
         org = request.user.organization
-        print(payment_data)
+        data_dict = {
+            "organization_name": org.name,
+            "organization_address": "" if org.address is None else org.address,
+            "organization_contact": "" if org.contact_number is None else org.contact_number,
+        }
         if payment_data:
             try:
                 receipt = PaymentReceipt.objects.get(
@@ -544,20 +590,14 @@ class PaymentView(viewsets.ModelViewSet):
                     amount_assigned, amount_paid, amount_owing = payment_aggregate(
                         payment_data.student.id
                     )
-                    receipt_number = generate_random_receipt_number()
-                    cheque_no = ""
-                    if payment_data.cheque_number:
-                        cheque_no = payment_data.cheque
-                    data_dict = {
-                        "organization_name": org.name,
-                        "organization_address": "" if org.address is None else org.address,
-                        "organization_contact": "" if org.contact_number is None else org.contact_number,
+                    purpose = f"Payment for {payment_data.fee.name}"
+                    data_dict.update({
                         "cashier_name": payment_data.user.__str__(),
                         "payment_mode": "" if payment_data.payment_method is None else payment_data.payment_method,
-                        "cheque_number": cheque_no,
+                        "cheque_number": "" if payment_data.cheque_number is None else payment_data.cheque_number,
                         "payer": payment_data.student.__str__(),
                         "date": payment_data.date_created.strftime("%d-%m-%Y"),
-                        "receipt_number": receipt_number,
+                        "receipt_number": receipt_number[:8],
                         "client_reference": payment_data.student.__str__(),
                         "description": f"Payment for {payment_data.fee.name}",
                         "income_amount": payment_data.amount,
@@ -567,44 +607,117 @@ class PaymentView(viewsets.ModelViewSet):
                         "payment_breakdown": all_payments,
                         "total_amount_assigned": amount_assigned,
                         "total_amount_paid": amount_paid,
-                        "total_amount_owing": amount_owing
-                    }
-                    pdf = convert_html_to_pdf(
-                        data_dict, "fee_receipt.html", f'{receipt_number}.pdf'
+                        "total_amount_owing": amount_owing,
+                        "fee_arrears_payment": arrear_payment_map
+                    })
+                    arrear_paid_obj = None
+                    arrears_owing, total_paid, arrear_balance = arrears_payment_aggregate(payment_data.student.id)
+                    data_dict["total_amount_assigned"] += arrears_owing
+                    data_dict["total_amount_paid"] += total_paid
+                    data_dict["total_amount_owing"] += arrear_balance
+                except Exception as rec_except:
+                    return Response(
+                        {"message": rec_except.__str()},
+                        status=status.HTTP_400_BAD_REQUEST)
+            except Exception as rec_except1:
+                return Response(
+                    {"message": rec_except1.__str()},
+                    status=status.HTTP_400_BAD_REQUEST)
+        else:
+            if arrear_paid_obj:
+                payment_data = None
+                arrears_owing, total_paid, arrear_balance = arrears_payment_aggregate(arrear_paid_obj.fee_arrear.student.id)
+                data_dict["total_amount_assigned"] += arrears_owing
+                data_dict["total_amount_paid"] += total_paid
+                data_dict["total_amount_owing"] += arrear_balance
+                try:
+                    receipt = PaymentReceipt.objects.get(
+                        arrear_payment__id=arrear_paid_obj.id
                         )
-                    if pdf:
-                        receipt = PaymentReceipt.objects.create(
-                            payment=payment_data,
-                            receipt_number=receipt_number[:8],
-                            purpose=f"Payment for {payment_data.fee.name}"
-                        )
-                        # receipt_file = ""
-                        f = open(f'{receipt_number}.pdf', 'rb')
-                        receipt.file.save(
-                            name=f'{receipt_number}.pdf',
-                            content=File(f), save=True
-                            )
-                        receipt.save()
-                        result = PaymentReceiptSerializer(
+                    result = PaymentReceiptSerializer(
                             instance=receipt, context={"request": request}
                             )
-                        os.remove(f'{receipt_number}.pdf')
-                        return Response(
-                            result.data,
-                            status=status.HTTP_200_OK
-                        )
-                    else:
-                        return Response(
-                            {"message": "Receipt generation faile"},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-                except Exception as pay_except1:
                     return Response(
-                        {"message": pay_except1.__str__()}, status=status.HTTP_400_BAD_REQUEST)
-            except Exception as pay_except:
-                return Response({"message": pay_except.__str__()}, status=status.HTTP_400_BAD_REQUEST)
+                        result.data,
+                        status=status.HTTP_200_OK
+                    )
+                except PaymentReceipt.DoesNotExist:
+                    purpose = f"Arrears Payment for {arrear_paid_obj.fee_arrear.student.__str__()}"
+                    data_dict.update({
+                            "cashier_name": arrear_paid_obj.user.__str__(),
+                            "payment_mode": "" if arrear_paid_obj.payment_method is None else arrear_paid_obj.payment_method,
+                            "cheque_number": "" if arrear_paid_obj.cheque_number is None else arrear_paid_obj.cheque_number,
+                            "payer": arrear_paid_obj.fee_arrear.student.__str__(),
+                            "date": arrear_paid_obj.date_created.strftime("%d-%m-%Y"),
+                            "receipt_number": receipt_number,
+                            "client_reference": arrear_paid_obj.fee_arrear.student.__str__(),
+                            "description": f"Arrear Payment for {arrear_paid_obj.fee_arrear.student.__str__()}",
+                            "income_amount": arrear_paid_obj.amount,
+                            "payment_time": arrear_paid_obj.date_created.strftime(
+                                "%I:%M %p"
+                                ),
+                            "payment_breakdown": None,
+                            "total_amount_assigned": fee_arrears.aggregate(Sum("amount"))["amount__sum"],
+                            "total_amount_paid": total_paid,
+                            "total_amount_owing": arrears_owing,
+                            "fee_arrears_payment": arrear_payment_map
+                        })
+                except Exception as rec_except2:
+                    return Response(
+                        {"message": rec_except2.__str()},
+                        status=status.HTTP_400_BAD_REQUEST)
+        pdf = convert_html_to_pdf(
+            data_dict, "fee_receipt.html", f'{receipt_number}.pdf'
+            )
+        if pdf:
+            receipt = PaymentReceipt.objects.create(
+                payment=payment_data,
+                arrear_payment=arrear_paid_obj,
+                receipt_number=receipt_number,
+                purpose=purpose,
+                # details=data_dict
+            )
+            # receipt_file = ""
+            f = open(f'{receipt_number}.pdf', 'rb')
+            receipt.file.save(
+                name=f'{receipt_number}.pdf',
+                content=File(f), save=True
+                )
+            receipt.save()
+            result = PaymentReceiptSerializer(
+                instance=receipt, context={"request": request}
+                )
+            os.remove(f'{receipt_number}.pdf')
+            return Response(
+                result.data,
+                status=status.HTTP_200_OK
+            )
         else:
             return Response(
-                {"message": "Payment not found"},
+                {"message": "Receipt generation failed"},
                 status=status.HTTP_400_BAD_REQUEST
-                )
+            )
+
+
+class FeeArrearView(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = FeeArrearSerializer
+    queryset = FeeArrear.objects.all()
+    http_method_names = ["get", "post", "patch", "delete"]
+
+
+class ArrearPaymentView(viewsets.ModelViewSet):
+    """API Views for the arears payment"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ArrearPaymentSerializer
+    queryset = ArrearPayment.objects.filter(
+        fee_arrear__arrear_balance__gt=0
+    )
+    http_method_names = ["get", "post"]
+
+    def handle_exception(self, exc):
+        if isinstance(exc, ValidationError):
+            return Response(
+                {"message": exc.message, "error_message": "Validation Error"},
+                status=status.HTTP_400_BAD_REQUEST)
+        return super().handle_exception(exc)

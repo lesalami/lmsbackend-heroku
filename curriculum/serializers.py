@@ -18,7 +18,8 @@ from core.models import (
     Staff, Class, StudentClass,
     ParentOrGuardian, TeacherAssignment, TeacherClass,
     Fee, User, StudentFeeGroup,
-    Payment, PaymentReceipt
+    Payment, PaymentReceipt,
+    FeeArrear, ArrearPayment,
 )
 
 from user.serializers import UserSerializer
@@ -702,6 +703,59 @@ class PaymentReceiptSerializer(BaseModelSerializer):
             ]
 
     def create(self, validated_data):
+        return super().create(validated_data)
+
+
+class FeeArrearSerializer(serializers.ModelSerializer):
+    """Serializer for the Fee Arrear model"""
+    date_created = serializers.DateTimeField(
+        required=False, read_only=True,
+        format="%d-%m-%Y", input_formats=settings.DATE_INPUT_FORMATS
+    )
+    last_modified = serializers.DateTimeField(
+        required=False, read_only=True,
+        format="%d-%m-%Y", input_formats=settings.DATE_INPUT_FORMATS
+    )
+
+    class Meta:
+        model = FeeArrear
+        fields = [
+            "id", "date_created", "last_modified",
+            "academic_year", "academic_term",
+            "student", "amount", "arrear_balance"
+        ]
+
+    def create(self, validated_data):
+        academic_year = validated_data.get("academic_year", None)
+        if not academic_year:
+            validated_data["academic_year"] = AcademicYear.objects.get(
+                is_active=True
+                )
+        return super().create(validated_data)
+
+
+class ArrearPaymentSerializer(BaseModelSerializer):
+    """Serializer for the Arrear Payment"""
+    date_created = serializers.DateTimeField(
+        required=False, read_only=True,
+        format="%d-%m-%Y", input_formats=settings.DATE_INPUT_FORMATS
+    )
+    last_modified = serializers.DateTimeField(
+        required=False, read_only=True,
+        format="%d-%m-%Y", input_formats=settings.DATE_INPUT_FORMATS
+    )
+
+    class Meta:
+        model = ArrearPayment
+        fields = [
+            "id", "date_created", "last_modified",
+            "fee_arrear", "amount", "owing_after_payment",
+            "payment_method", "cheque_number"
+        ]
+    
+    def create(self, validated_data):
+        user = self.context.get("request").user
+        validated_data["user"] = user
         return super().create(validated_data)
 
 

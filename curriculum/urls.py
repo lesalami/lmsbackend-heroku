@@ -55,6 +55,12 @@ router.register(
 router.register(
     "payment", views.PaymentView, basename="payment"
 )
+router.register(
+    "fee-arrears", views.FeeArrearView, basename="fee-arrears"
+)
+router.register(
+    "fee-arrears-payment", views.ArrearPaymentView, basename="fee-arrears-payment"
+)
 
 
 urlpatterns = [
