@@ -85,14 +85,14 @@ def convert_html_to_pdf(
       .metadata {
         width: 100%;
         background-color: #f9f9f9;
-        padding: 1.5rem;
-        font-size: medium;
+        padding: 2.0rem;
+        font-size: 12px;
       }
 
       .metadata > .item {
         display: flex;
         justify-content: space-between;
-        margin: 0.5rem;
+        margin: 1.5rem;
       }
 
       table {
@@ -147,7 +147,13 @@ def convert_html_to_pdf(
         margin-bottom: 0.5rem;
         font-size: small;
       }
-        div { font-size: 10px }
+      .signature {
+        width: 45%;
+        border-bottom: 1px dotted #000;
+        padding-bottom: 10px;
+        margin-right: 20px;
+    }
+        div { font-size: 12px }
         h1 { font-family: Times New Roman, font-size: 10px }""",
         font_config=font_config,
     )
