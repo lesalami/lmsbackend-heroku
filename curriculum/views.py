@@ -587,7 +587,7 @@ class PaymentView(viewsets.ModelViewSet):
                 )
             except PaymentReceipt.DoesNotExist:
                 try:
-                    all_payments = fee_payment_breakdown(payment_data.student.id)
+                    # all_payments = fee_payment_breakdown(payment_data.student.id)
                     amount_assigned, amount_paid, amount_owing = payment_aggregate(
                         payment_data.student.id
                     )
@@ -605,7 +605,7 @@ class PaymentView(viewsets.ModelViewSet):
                         "payment_time": payment_data.date_created.strftime(
                             "%I:%M %p"
                             ),
-                        "payment_breakdown": all_payments,
+                        "payment_breakdown": payment_data,
                         "total_amount_assigned": amount_assigned,
                         "total_amount_paid": amount_paid,
                         "total_amount_owing": amount_owing,

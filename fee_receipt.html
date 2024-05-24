@@ -224,18 +224,16 @@
             </tr>
             <tbody>
               {% if payment_breakdown %}
-                {%  for payment in payment_breakdown%}
               <tr>
-                <td style="width: 50%">{{ payment.fee_name }}</td>
-                <td>GHS {{ payment.amount_paid }}</td>
-                <td>GHS {{ payment.amount_owing }}</td>
+                <td style="width: 50%">{{ payment_breakdown.fee.name }}</td>
+                <td>GHS {{ payment_breakdown.amount }}</td>
+                <td>GHS {{ total_amount_owing }}</td>
               </tr>
-              {% endfor %}
               {% endif %}
               <tfoot>
                 <tr style="font-weight: bold;">
                     <td >Total</td>
-                    <td>GHS {{ total_amount_paid }}</td>
+                    <td>GHS {{ payment_breakdown.amount }}</td>
                     <td>GHS {{ total_amount_owing }}</td>
                   </tr>
                 </tfoot>
