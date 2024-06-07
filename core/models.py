@@ -509,17 +509,26 @@ class StudentClass(models.Model):
             total_fees_assigned = self.fee_assigned.fees.all().aggregate(
                 models.Sum("amount")
             )
-            if total_fees_assigned["amount__sum"] < self.fee_paid:
-                raise ValidationError(
-                    message="Payment amount is greater than the fee amount",
-                    code="payment_error",
-                )
-            current_fee_owing = total_fees_assigned["amount__sum"] - self.fee_paid
-            self.fee_owing = current_fee_owing + fee_owing_from_previous_year
-            if self.fee_paid < total_fees_assigned["amount__sum"]:
-                self.owing = True
+            total_payment = Payment.objects.filter(
+                student__id=self.student.id, academic_year=self.academic_year
+            ).aggregate(models.Sum("amount"))
+            print("Total payment from student class: ", total_payment["amount__sum"])
+            if total_payment["amount__sum"]:
+                if total_fees_assigned["amount__sum"] < total_payment["amount__sum"]:
+                    raise ValidationError(
+                        message="Payment amount is greater than the fee amount",
+                        code="payment_error",
+                    )
+                self.fee_paid = total_payment["amount__sum"]
+                current_fee_owing = total_fees_assigned["amount__sum"] - total_payment["amount__sum"]
+                self.fee_owing = current_fee_owing + fee_owing_from_previous_year
+                if total_payment["amount__sum"] < total_fees_assigned["amount__sum"]:
+                    self.owing = True
+                else:
+                    self.owing = True
             else:
-                self.owing = True
+                self.fee_paid = 0
+                self.fee_owing = total_fees_assigned["amount__sum"]
         else:
             pass
         super().save(*args, **kwargs)
@@ -621,21 +630,33 @@ class Payment(models.Model):
     def save(self, *args, **kwargs):
         # Calculate the new balance after the payment
         if self.fee.amount < self.amount:
-            raise ValidationError("Payment amount is greater than the fee amount")
+            raise ValidationError(
+                message=f"Payment amount is greater than the fee amount {self.amount} {self.academic_term}",
+                    code="payment_error",
+            )
         print(hasattr(self.student, "studentclass_object"))
         totalassigned = self.student.studentclass_object.fee_assigned.fees.all(
 
         ).aggregate(
                 models.Sum("amount")
             )
-        amount_paid = self.amount + self.student.studentclass_object.fee_paid
-        self.owing_after_payment = totalassigned["amount__sum"] - amount_paid
-
+        total_historic_payment = Payment.objects.filter(
+            student=self.student, academic_year=self.academic_year
+            ).aggregate(
+                models.Sum("amount")
+            )
+        if total_historic_payment["amount__sum"]:
+            amount_paid = self.amount + total_historic_payment["amount__sum"]
+            self.owing_after_payment = totalassigned["amount__sum"] - amount_paid
+        else:
+            amount_paid = self.amount
+            self.owing_after_payment = totalassigned["amount__sum"] - amount_paid
         # Update the current balance of the student
         print(amount_paid)
+        self.student.studentclass_fee.fee_paid = amount_paid
         self.student.save()
-        self.student.studentclass_fee = amount_paid
-        # self.student.studentclass_object.save()
+        # self.student.studentclass_fee = amount_paid
+        self.student.studentclass_object.save()
 
         super().save(*args, **kwargs)
 
