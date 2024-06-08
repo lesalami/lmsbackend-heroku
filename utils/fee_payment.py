@@ -19,7 +19,7 @@ def fee_payment_breakdown(student_id: uuid4) -> list:
         student__id=student_id,
         academic_year__is_active=True
     )
-    all_fees = student_class.fee_assigned.fees.all()
+    all_fees = student_class.fee_assigned.fees.all().order_by("date_created")
     fee_breakdown_list = []
     for fee in all_fees:
         paid_amount = 0

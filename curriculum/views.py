@@ -215,14 +215,19 @@ class StudentView(viewsets.ModelViewSet):
                 academic_year__is_active=True
             )
             if student_class.fee_assigned:
-                fees = student_class.fee_assigned.fees.all()
-                fee_paid = student_class.fee_paid
-                fee_owing = student_class.fee_owing
+                fees = student_class.fee_assigned.fees.all().order_by("date_created")
+                fee_paid = Payment.objects.filter(
+                    student=self.get_object(),
+                    academic_year__is_active=True
+                ).aggregate(Sum("amount"))
+                fee_owing = fees.aggregate(Sum("amount"))["amount__sum"] - fee_paid["amount__sum"]
                 if fees:
                     fee_list = []
                     for fee in fees:
                         amount_paid = Payment.objects.filter(
-                            fee=fee).aggregate(
+                            fee=fee,
+                            student=self.get_object()
+                            ).aggregate(
                             Sum("amount")
                         )
                         fee_list.append({
@@ -238,9 +243,9 @@ class StudentView(viewsets.ModelViewSet):
                             is_active=True).year,
                         "academic_term": AcademicTerm.objects.get(
                             is_active=True).term,
-                        "amount_paid": fee_paid,
+                        "amount_paid": fee_paid["amount__sum"],
                         "amount_owing": fee_owing,
-                        "owing": student_class.owing
+                        "owing": fee_owing > 0
                     }
                     return Response(
                         result,
@@ -471,6 +476,14 @@ class PaymentView(viewsets.ModelViewSet):
         academic_year__is_active=True
     )
     http_method_names = ["get", "post"]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = [
+        'payment_method'
+        ]
+    search_fields = [
+        'student__first_name', 'student__last_name', 'academic_year__year',
+        'academic_term__term'
+        ]
 
     def handle_exception(self, exc):
         if isinstance(exc, ValidationError):
