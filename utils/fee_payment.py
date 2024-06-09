@@ -19,7 +19,7 @@ def fee_payment_breakdown(student_id: uuid4) -> list:
         student__id=student_id,
         academic_year__is_active=True
     )
-    all_fees = student_class.fee_assigned.fees.all().order_by("date_created")
+    all_fees = student_class.fee_assigned.fees.all()
     fee_breakdown_list = []
     for fee in all_fees:
         paid_amount = 0
@@ -30,14 +30,15 @@ def fee_payment_breakdown(student_id: uuid4) -> list:
         )
         if fee_payment:
             paid_amount = fee_payment.aggregate(Sum("amount"))["amount__sum"]
-        fee_breakdown_list.append(
-            {
+        target_index = fee.academic_term.order - 1
+        while len(fee_breakdown_list) <= target_index:
+            fee_breakdown_list.append(None)
+        fee_breakdown_list[target_index] = {
                 "fee_name": fee.name,
                 "fee_amount": fee.amount,
                 "amount_paid": paid_amount,
                 "amount_owing": fee.amount - paid_amount
             }
-        )
     print(fee_breakdown_list)
     return fee_breakdown_list
 

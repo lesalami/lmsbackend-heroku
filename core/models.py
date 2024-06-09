@@ -206,6 +206,9 @@ class AcademicTerm(models.Model):
         null=True, blank=True, related_name="next",
         help_text="Pointer to previous academic term"
         )
+    order = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="First Term is 1, Second term is 2, Third term is 3")
 
     def __str__(self):
         return self.term
