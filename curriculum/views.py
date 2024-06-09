@@ -727,6 +727,15 @@ class ArrearPaymentView(viewsets.ModelViewSet):
         fee_arrear__arrear_balance__gt=0
     )
     http_method_names = ["get", "post"]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = [
+        'payment_method'
+        ]
+    search_fields = [
+        'fee_arrear__student__first_name', 'fee_arrear__student__last_name',
+        'fee_arrear__student__id',
+        'fee_arrear__academic_year__year', 'fee_arrear__academic_term__term'
+        ]
 
     def handle_exception(self, exc):
         if isinstance(exc, ValidationError):
