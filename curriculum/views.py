@@ -222,6 +222,10 @@ class StudentView(viewsets.ModelViewSet):
                 ).aggregate(Sum("amount"))
                 fee_owing = fees.aggregate(Sum("amount"))["amount__sum"] - fee_paid["amount__sum"]
                 if fees:
+                    transactions = Payment.objects.filter(
+                        student=self.get_object(),
+                        academic_year__is_active=True
+                    ).order_by("-date_created")[:5]
                     fee_list = []
                     for fee in fees:
                         amount_paid = Payment.objects.filter(
@@ -239,6 +243,7 @@ class StudentView(viewsets.ModelViewSet):
                         })
                     result = {
                         "fees": fee_list,
+                        "transactions": PaymentSerializer(instance=transactions, many=True).data,
                         "academic_year": AcademicYear.objects.get(
                             is_active=True).year,
                         "academic_term": AcademicTerm.objects.get(
