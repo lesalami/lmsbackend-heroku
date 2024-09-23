@@ -58,6 +58,20 @@ To run the application outside docker compose(This assumes you are not new to dj
 ```bash
     python manage.py backfill_fees <csv-filename or relative path to file>
 ```
+* Special command for deleting data from the database. The command takes multiple models.
+```bash
+python manage.py delete_model_data auth.User yourapp.YourModel
+```
+* Special Command to backup the database and push to S3 (This works for MySQL and PostgreSQL databases)
+    * Ensure AWS Credentials are set as env variables
+    ```
+    AWS_ACCESS_KEY_ID = 'your-access-key-id'
+    AWS_SECRET_ACCESS_KEY = 'your-secret-access-key'
+    AWS_STORAGE_BUCKET_NAME = 'your-s3-bucket-name'
+    ```
+```bash
+python manage.py backup_db
+```
 
 
 ## THE END
