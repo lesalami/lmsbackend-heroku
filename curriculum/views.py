@@ -23,6 +23,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema
 
 from curriculum.serializers import (
     AcademicYearSerializer, StudentSerializer,
@@ -359,6 +360,25 @@ class StudentView(viewsets.ModelViewSet):
                 "message": exc.__str__()
             }, status.HTTP_400_BAD_REQUEST)
 
+    @extend_schema(request={
+        "application/json": {
+            "example": {
+                "from_academic_year": "2023/2024",
+                "to_academic_year": "2024/2025",
+                "from_class": "BASIC 4",
+                "to_class": "BASIC 5"}
+            },
+        },
+        responses={
+       (200, 'application/json'): {
+            'description': 'Student Promotion',
+            'type': 'json',
+            'example': {
+                "message": "Student promoted successfully",
+                "data": {},
+            }
+        },
+    })
     @action(
             detail=True, methods=["post"],
             url_path="promote", url_name="promote")
@@ -370,7 +390,6 @@ class StudentView(viewsets.ModelViewSet):
         _to_class = request.data.get("to_class", None)
 
         if not _from_academic_year and not _to_academic_year:
-            print(_from_academic_year)
             _to_academic_year = AcademicYear.objects.get(is_active=True)
             if not _to_academic_year.previous:
                 return Response({
@@ -381,7 +400,7 @@ class StudentView(viewsets.ModelViewSet):
         if not isinstance(_from_academic_year, AcademicYear) and not isinstance(_to_academic_year, AcademicYear):
             from_academic_year = AcademicYear.objects.get(year=_from_academic_year)
             to_academic_year = AcademicYear.objects.get(year=_to_academic_year)
-        print(from_academic_year, pk)
+
         if not _from_class or not _to_class:
             return Response({
                 "message": "Select the class to promote the student from and to which class",
@@ -398,7 +417,6 @@ class StudentView(viewsets.ModelViewSet):
             student__id=pk,
             student_class=from_class,
         )
-        print(old_student)
         new_group = old_student.fee_assigned
         for key_item, val_item in class_to_fee_group.items():
             if to_class in val_item:
@@ -415,7 +433,8 @@ class StudentView(viewsets.ModelViewSet):
             f" has been promoted from {from_class} successfully. Confirm the Fee Group",
             ]
         return Response({
-            "message": "".join(msg)
+            "message": "".join(msg),
+            "data": StudentClassSerializer(instance=promoted_obj).data
         }, status=status.HTTP_200_OK)
 
 
