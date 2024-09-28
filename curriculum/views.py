@@ -2,6 +2,7 @@
 Views for the Curriculum API.
 """
 import os
+from typing import Any
 from datetime import datetime, timedelta
 from django.core.files import File
 from django.http import Http404
@@ -50,7 +51,7 @@ from utils.fee_payment import (
     fee_payment_breakdown, payment_aggregate,
     arrears_payment_aggregate
 )
-from utils.utils import generate_random_receipt_number
+from utils.utils import generate_random_receipt_number, class_to_fee_group
 
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,63 @@ class AcademicYearView(viewsets.ModelViewSet):
         is_active=True
         ).order_by("-date_created")
     http_method_names = ["get", "post", "patch", "delete"]
+
+    @action(
+            detail=False, methods=["get"],
+            url_path="close-current", url_name="close-current")
+    def close_period(self, request) -> Response:
+        """Close the academic year and move to a new"""
+        current_year = AcademicYear.objects.get(is_active=True)
+        current_year.is_active = False
+        current_year.save()
+        _next_year = datetime.now().year
+        new_academic_year = AcademicYear.objects.create(
+            is_active=True,
+            year=f"{_next_year}/{_next_year + 1}",
+            previous=current_year
+        )
+        _term_names = AcademicTerm.objects.filter(
+            academic_year=current_year
+        ).values_list("term", "order")
+        for (name, _order) in _term_names:
+            AcademicTerm.objects.create(
+                term=name,
+                academic_year=new_academic_year,
+                order=_order,
+                is_active=False
+            )
+        AcademicTerm.objects.filter(academic_year=current_year, is_active=True).update(is_active=False)
+        AcademicTerm.objects.filter(academic_year=new_academic_year, order=1).update(is_active=True)
+        _current_year_fees = Fee.objects.filter(
+            academic_year=current_year,
+        ).values_list("name", "amount", "academic_term__term")
+        for (name, amount, term_name) in _current_year_fees:
+            Fee.objects.get_or_create(
+                name=name, amount=amount,
+                academic_term=AcademicTerm.objects.get(academic_year=new_academic_year, term=term_name),
+                academic_year=new_academic_year
+                )
+        group_register = {}
+        _current_fee_groups = StudentFeeGroup.objects.filter(
+            fees__academic_year=current_year
+        ).values_list("fees__name", "name")
+        for (_fee_name, _name) in _current_fee_groups:
+            associated_fee = Fee.objects.get(name=_fee_name, academic_year=new_academic_year)
+            if _name in group_register:
+                StudentFeeGroup.objects.get(name=_name, academic_year=new_academic_year).fees.add(associated_fee)
+                group_register[_name]["items"].append(_fee_name)
+            else:
+                created_group, _ = StudentFeeGroup.objects.get_or_create(
+                    name=_name, academic_year=new_academic_year
+                )
+                group_register[_name] = {"object": created_group, "items": []}
+                created_group.fees.add(associated_fee)
+                group_register[_name]["items"].append(_fee_name)
+        return Response({
+            "academic_year": new_academic_year.year,
+            "message": f"Academic year {new_academic_year.year} created successfully",
+            "status": "Success"
+        }, status=status.HTTP_200_OK)
 
 
 class AcademicTermView(viewsets.ModelViewSet):
@@ -97,13 +155,13 @@ class StudentView(viewsets.ModelViewSet):
         'student_id'
         ]
 
-    def get_permissions(self):
+    def get_permissions(self) -> Any:
         self.permission_classes = self.permissions.get(
             self.action, self.permissions['default']
             )
         return super().get_permissions()
 
-    def filter_queryset(self, queryset):
+    def filter_queryset(self, queryset) -> Any:
         class_id = self.request.GET.get("student_class", None)
         if class_id:
             print(class_id)
@@ -127,7 +185,7 @@ class StudentView(viewsets.ModelViewSet):
     @action(
             detail=False, methods=["get"],
             url_path="metrics", url_name="metrics")
-    def metrics(self, request, *args, **kwargs):
+    def metrics(self, request, *args, **kwargs) -> Response:
         """Return some metrics on students"""
         current_year = AcademicYear.objects.get(is_active=True)
         total_students = StudentClass.objects.filter(
@@ -171,7 +229,7 @@ class StudentView(viewsets.ModelViewSet):
     @action(
             detail=True, methods=["get"],
             url_path="finance", url_name="finance")
-    def finance(self, request, pk=None):
+    def finance(self, request, pk=None) -> Response:
         """Return financial data on the student"""
         try:
             student_class = StudentClass.objects.get(
@@ -204,7 +262,7 @@ class StudentView(viewsets.ModelViewSet):
     @action(
             detail=True, methods=["get"],
             url_path="fees", url_name="fees")
-    def student_fee_assigned(self, request, pk=None):
+    def student_fee_assigned(self, request, pk=None) -> Response:
         """Fee assigned, paid, owing"""
         acad_term = AcademicTerm.objects.get(is_active=True).term,
         if not acad_term:
@@ -275,7 +333,7 @@ class StudentView(viewsets.ModelViewSet):
            detail=False, methods=["POST"],
            url_path="fee-group-assignment", url_name="fee-group-assignment"
     )
-    def assigned_fee_group_to_students(self, request, *args, **kwargs):
+    def assigned_fee_group_to_students(self, request, *args, **kwargs) -> Response:
         """Assign fee group to multiple students"""
         try:
             student_ids = request.data["students"]
@@ -301,6 +359,64 @@ class StudentView(viewsets.ModelViewSet):
                 "message": exc.__str__()
             }, status.HTTP_400_BAD_REQUEST)
 
+    @action(
+            detail=True, methods=["post"],
+            url_path="promote", url_name="promote")
+    def promote_student(self, request, pk=None) -> Response:
+        """Promote Student"""
+        _from_academic_year = request.data.get("from_academic_year", None)
+        _to_academic_year = request.data.get("to_academic_year", None)
+        _from_class = request.data.get("from_class", None)
+        _to_class = request.data.get("to_class", None)
+
+        if not _from_academic_year and not _to_academic_year:
+            print(_from_academic_year)
+            _to_academic_year = AcademicYear.objects.get(is_active=True)
+            if not _to_academic_year.previous:
+                return Response({
+                    "message": "The current academic year doesn't have a previous year to promote from",
+                    "error_message": "An error occurred"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            _from_academic_year = _to_academic_year.previous
+        if not isinstance(_from_academic_year, AcademicYear) and not isinstance(_to_academic_year, AcademicYear):
+            from_academic_year = AcademicYear.objects.get(year=_from_academic_year)
+            to_academic_year = AcademicYear.objects.get(year=_to_academic_year)
+        print(from_academic_year, pk)
+        if not _from_class or not _to_class:
+            return Response({
+                "message": "Select the class to promote the student from and to which class",
+                "error_message": "An exception occured"
+            }, status=status.HTTP_400_BAD_REQUEST)
+        from_class = Class.objects.get(name=_from_class)
+        to_class = Class.objects.get(name=_to_class)
+        if from_class == to_class:
+            return Response({
+                "message": "The classes are the same. `from_class` must differ from `to_class`"
+            })
+        old_student = StudentClass.objects.get(
+            # academic_year=from_academic_year,
+            id=pk,
+        )
+        print(old_student)
+        new_group = old_student.fee_assigned
+        for key_item, val_item in class_to_fee_group.items():
+            if to_class in val_item:
+                new_group = StudentFeeGroup.objects.get(name=key_item)
+        promoted_obj, _ = StudentClass.objects.get_or_create(
+            academic_year=to_academic_year,
+            student=old_student.student,
+            student_class=to_class,
+            fee_assigned=new_group
+        )
+
+        msg: list[str] = [
+            f"Student {promoted_obj.student.first_name} {promoted_obj.student.last_name}",
+            f" has been promoted from {from_class} successfully. Confirm the Fee Group",
+            ]
+        return Response({
+            "message": "".join(msg)
+        }, status=status.HTTP_200_OK)
+
 
 class ParentOrGuardianView(viewsets.ModelViewSet):
     """API View for Parent or Guardian"""
@@ -325,19 +441,19 @@ class StaffView(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = StaffSerializer
     queryset = Staff.objects.filter().order_by("-date_created")
-    http_method_names = ["get", "post", "patch", "delete"]
-    parser_classes = [JSONParser, FormParser, MultiPartParser]
+    http_method_names: list[str] = ["get", "post", "patch", "delete"]
+    parser_classes: list = [JSONParser, FormParser, MultiPartParser]
     pagination_class = StandardResultsSetPagination
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = [
+    filter_backends: list = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields: list[str] = [
         'date_created', 'gender', 'staff_type',
         'employment_type', 'is_active'
         ]
-    search_fields = [
+    search_fields: list[str] = [
         'user__first_name', 'user__last_name', 'staff_id',
         ]
 
-    def get_queryset(self):
+    def get_queryset(self) -> Any:
         return self.queryset.filter(
             user__organization=self.request.user.organization
             )
@@ -345,7 +461,7 @@ class StaffView(viewsets.ModelViewSet):
     @action(
             detail=False, methods=["get"],
             url_path="metrics", url_name="metrics")
-    def metrics(self, request, *args, **kwargs):
+    def metrics(self, request, *args, **kwargs) -> Response:
         """Return some metrics on teachers"""
         total_teachers = Staff.objects.filter(
             is_active=True, staff_type=StaffType.Teaching
@@ -439,13 +555,13 @@ class StudentClassView(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete"]
     pagination_class = StandardResultsSetPagination
 
-    def get_permissions(self):
+    def get_permissions(self) -> Any:
         self.permission_classes = self.permissions.get(
             self.action, self.permissions['default']
             )
         return super().get_permissions()
 
-    def handle_exception(self, exc):
+    def handle_exception(self, exc) -> Any:
         if isinstance(exc, ValidationError):
             return Response(
                 {"message": exc.message, "error_message": "Validation Error"},
@@ -490,7 +606,7 @@ class PaymentView(viewsets.ModelViewSet):
         'academic_term__term'
         ]
 
-    def handle_exception(self, exc):
+    def handle_exception(self, exc) -> Any:
         if isinstance(exc, ValidationError):
             return Response(
                 {"message": exc.message, "error_message": "Validation Error"},
@@ -500,7 +616,7 @@ class PaymentView(viewsets.ModelViewSet):
     @action(
             detail=False, methods=["get"],
             url_path="metrics", url_name="metrics")
-    def metrics(self, request, *args, **kwargs):
+    def metrics(self, request, *args, **kwargs) -> Response:
         """Return some metrics on Payment"""
         current_year = AcademicYear.objects.get(is_active=True)
         current_payment = self.queryset.filter(
@@ -544,7 +660,7 @@ class PaymentView(viewsets.ModelViewSet):
     @action(
             detail=True, methods=["get"],
             url_path="receipt", url_name="receipt")
-    def get_receipt(self, request, pk=None):
+    def get_receipt(self, request, pk=None) -> Response:
         """Generate and retun a PDF receipt given Payment ID"""
         arrear_payment_map = []
         receipt_number = generate_random_receipt_number()

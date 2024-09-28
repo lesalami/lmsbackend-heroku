@@ -210,7 +210,7 @@ class AcademicTerm(models.Model):
         null=True, blank=True,
         help_text="First Term is 1, Second term is 2, Third term is 3")
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.term
 
     def validate_unique(self, *args, **kwargs):
@@ -433,7 +433,7 @@ class Class(models.Model):
     #     Fee, on_delete=models.SET_NULL, null=True, blank=True
     #     )
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.name}"
 
     class Meta:
@@ -457,9 +457,17 @@ class StudentFeeGroup(models.Model):
     last_modified = models.DateTimeField(auto_now=True)
     fees = models.ManyToManyField(Fee)
     name = models.CharField(max_length=255, null=True, blank=True)
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, null=True, blank=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        if self.academic_year is None:
+            first_item = self.fees.first()
+            if first_item:
+                self.academic_year = first_item.academic_year
+        return super().save(*args, **kwargs)
 
 
 class StudentClass(models.Model):
@@ -472,8 +480,7 @@ class StudentClass(models.Model):
     date_created = models.DateTimeField(auto_now_add=True, db_index=True)
     last_modified = models.DateTimeField(auto_now=True)
     academic_year = models.ForeignKey(
-        AcademicYear, on_delete=models.CASCADE,
-        null=True
+        AcademicYear, on_delete=models.CASCADE, null=True
         )
     student = models.ForeignKey(
         Student, on_delete=models.CASCADE,
@@ -501,13 +508,14 @@ class StudentClass(models.Model):
     def save(self, *args, **kwargs):
         # Calculate the new owing after the payment
         fee_owing_from_previous_year = 0
-        if self.academic_year.previous:
-            "Check if student has an outstanding fee"
-            previous_fee = self.__class__.objects.get(
-                student=self.student, academic_year=self.academic_year.previous
-                )
-            if previous_fee.fee_owing:
-                fee_owing_from_previous_year = previous_fee.fee_owing
+        if self.academic_year:
+            if self.academic_year.previous:
+                "Check if student has an outstanding fee"
+                previous_fee = self.__class__.objects.get(
+                    student=self.student, academic_year=self.academic_year.previous
+                    )
+                if previous_fee.fee_owing:
+                    fee_owing_from_previous_year = previous_fee.fee_owing
         if self.fee_assigned:
             total_fees_assigned = self.fee_assigned.fees.all().aggregate(
                 models.Sum("amount")
@@ -536,7 +544,7 @@ class StudentClass(models.Model):
             pass
         super().save(*args, **kwargs)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.student.first_name} - {self.student_class.name}"
 
     class Meta:
@@ -635,7 +643,7 @@ class Payment(models.Model):
         if self.fee.amount < self.amount:
             raise ValidationError(
                 message=f"Payment amount is greater than the fee amount {self.amount} {self.academic_term}",
-                    code="payment_error",
+                code="payment_error",
             )
         print(hasattr(self.student, "studentclass_object"))
         totalassigned = self.student.studentclass_object.fee_assigned.fees.all(
