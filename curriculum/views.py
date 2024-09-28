@@ -544,6 +544,79 @@ class ClassView(viewsets.ModelViewSet):
         'name', 'academic_year__year', 'academic_term__term'
         ]
 
+    @extend_schema(request={
+        "application/json": {
+            "example": {
+                "from_academic_year": "2023/2024",
+                "to_academic_year": "2024/2025",
+                "from_class": "BASIC 4",
+                "to_class": "BASIC 5"}
+            },
+        },
+        responses={
+       (200, 'application/json'): {
+            'description': 'Student Promotion',
+            'type': 'json',
+            'example': {
+                "message": "Student promoted successfully",
+                "data": {},
+            }
+        },
+    })
+    @action(
+            detail=False, methods=["post"],
+            url_path="bulk-promote", url_name="bulk-promote")
+    def promote_class(self, request) -> Response:
+        """Promote Student"""
+        _from_academic_year = request.data.get("from_academic_year", None)
+        _to_academic_year = request.data.get("to_academic_year", None)
+        _from_class = request.data.get("from_class", None)
+        _to_class = request.data.get("to_class", None)
+
+        if not _from_academic_year and not _to_academic_year:
+            _to_academic_year = AcademicYear.objects.get(is_active=True)
+            if not _to_academic_year.previous:
+                return Response({
+                    "message": "The current academic year doesn't have a previous year to promote from",
+                    "error_message": "An error occurred"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            _from_academic_year = _to_academic_year.previous
+        if not isinstance(_from_academic_year, AcademicYear) and not isinstance(_to_academic_year, AcademicYear):
+            from_academic_year = AcademicYear.objects.get(year=_from_academic_year)
+            to_academic_year = AcademicYear.objects.get(year=_to_academic_year)
+
+        if not _from_class or not _to_class:
+            return Response({
+                "message": "Select the class to promote the student from and to which class",
+                "error_message": "An exception occured"
+            }, status=status.HTTP_400_BAD_REQUEST)
+        from_class = Class.objects.get(name=_from_class)
+        to_class = Class.objects.get(name=_to_class)
+        if from_class == to_class:
+            return Response({
+                "message": "The classes are the same. `from_class` must differ from `to_class`"
+            })
+        student_data = {}
+        for student_obj in StudentClass.objects.filter(academic_year=from_academic_year, student_class=from_class):
+            new_group = student_obj.fee_assigned
+            for key_item, val_item in class_to_fee_group.items():
+                if to_class in val_item:
+                    new_group = StudentFeeGroup.objects.get(name=key_item)
+            try:
+                promoted_obj, _ = StudentClass.objects.get_or_create(
+                    academic_year=to_academic_year,
+                    student=student_obj.student,
+                    student_class=to_class,
+                    fee_assigned=new_group
+                )
+                student_data[str(student_obj.student.id)] = True
+            except Exception:
+                student_data[str(student_obj.student.id)] = False
+        return Response({
+            "message": f"Class {_from_class} promoted to {_to_class}. ",
+            "data": student_data
+        })
+
 
 class StudentFeeGroupView(viewsets.ModelViewSet):
     """API View for the student fee grup"""

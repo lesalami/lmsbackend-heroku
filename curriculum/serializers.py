@@ -102,9 +102,10 @@ class StudentSerializer(BaseModelSerializer):
 
     def get_student_class_obj(self, instance):
         """Get the individual student_class for the student"""
-        if StudentClass.objects.filter(student=instance).exists():
+        if StudentClass.objects.filter(academic_year__is_active=True, student=instance).exists():
             std_class_obj = StudentClass.objects.get(
-                student=instance
+                student=instance,
+                academic_year__is_active=True
             )
             fees_obj = ""
             if std_class_obj.fee_assigned:
