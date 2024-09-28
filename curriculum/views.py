@@ -394,8 +394,9 @@ class StudentView(viewsets.ModelViewSet):
                 "message": "The classes are the same. `from_class` must differ from `to_class`"
             })
         old_student = StudentClass.objects.get(
-            # academic_year=from_academic_year,
-            id=pk,
+            academic_year=from_academic_year,
+            student__id=pk,
+            student_class=from_class,
         )
         print(old_student)
         new_group = old_student.fee_assigned
