@@ -2,7 +2,9 @@
 The administration of models
 """
 from django.contrib import admin
+from collections.abc import Sequence
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.http import HttpRequest
 from django.utils.translation import gettext as _
 # from django.urls import reverse
 
@@ -130,8 +132,20 @@ class ArrearPaymentAdmin(admin.ModelAdmin):
     readonly_fields = ("owing_after_payment", )
 
 
+class StudentFeeGroupAdmin(admin.ModelAdmin):
+    """Model Admin for the Student Group"""
+
+    def get_list_display(self, request: HttpRequest) -> Sequence[str]:
+        return super().get_list_display(request)
+
+
+class FeeAdmin(admin.ModelAdmin):
+    """Model admin for the Fee mode"""
+    list_display = ["name", "academic_year"]
+
+
 admin.site.register(models.OrganizationConfig)
-admin.site.register(models.Fee)
+admin.site.register(models.Fee, FeeAdmin)
 admin.site.register(models.OrganizationDocument)
 admin.site.register(models.User, UserAdmin)
 admin.site.register(models.AcademicYear)
@@ -145,7 +159,7 @@ admin.site.register(models.AcademicTerm, AcademicTermAdmin)
 admin.site.register(models.TeacherAssignment, TeacherAssignmentAdmin)
 admin.site.register(models.TeacherClass, TeacherClassAdmin)
 admin.site.register(models.StudentClass, StudentClassAdmin)
-admin.site.register(models.StudentFeeGroup)
+admin.site.register(models.StudentFeeGroup, StudentFeeGroupAdmin)
 admin.site.register(models.Payment, PaymentAdmin)
 admin.site.register(models.PaymentReceipt)
 admin.site.register(models.FeeArrear, FeeArrearAdmin)

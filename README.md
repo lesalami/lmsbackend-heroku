@@ -73,6 +73,11 @@ python manage.py delete_model_data auth.User yourapp.YourModel
 python manage.py backup_db
 ```
 
+* Loading new students for the 2024/2025 academic year
+```bash
+    python manage.py load_students hha_student2024.csv
+```
+
 
 ## THE END
 

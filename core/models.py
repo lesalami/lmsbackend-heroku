@@ -2,7 +2,7 @@
 All database models go here
 """
 from decimal import Decimal
-from typing import Collection
+from typing import Collection, Any
 from uuid import uuid4
 from django.db import models
 # from django.forms.models import model_to_dict
@@ -276,12 +276,15 @@ class Student(models.Model):
         return f"{self.first_name} {self.last_name}"
 
     @property
-    def studentclass_object(self):
-        return StudentClass.objects.get(student=self)
+    def studentclass_object(self) -> Any:
+        return StudentClass.objects.get(
+            student=self, academic_year=AcademicYear.objects.get(is_active=True))
 
     @studentclass_object.setter
-    def studentclass_fee(self, new_value):
-        std_fee = StudentClass.objects.get(student=self)
+    def studentclass_fee(self, new_value) -> Any:
+        std_fee = StudentClass.objects.get(
+            student=self,
+            academic_year=AcademicYear.objects.get(is_active=True))
         std_fee.fee_paid = new_value
         std_fee.save()
 
@@ -505,7 +508,7 @@ class StudentClass(models.Model):
     )
     owing = models.BooleanField(default=True)
 
-    def save(self, *args, **kwargs):
+    def save(self, *args, **kwargs) -> Any:
         # Calculate the new owing after the payment
         fee_owing_from_previous_year = 0
         if self.academic_year:
@@ -523,7 +526,6 @@ class StudentClass(models.Model):
             total_payment = Payment.objects.filter(
                 student__id=self.student.id, academic_year=self.academic_year
             ).aggregate(models.Sum("amount"))
-            print("Total payment from student class: ", total_payment["amount__sum"])
             if total_payment["amount__sum"]:
                 if total_fees_assigned["amount__sum"] < total_payment["amount__sum"]:
                     raise ValidationError(

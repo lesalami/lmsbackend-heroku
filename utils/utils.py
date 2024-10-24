@@ -4,10 +4,7 @@ Any helper functions
 import secrets
 import string
 import logging
-# from django.db.models.signals import post_save
-# from django.dispatch import receiver
-# from core.models import Payment, AcademicTerm
-# from finance.models import Income, IncomeType
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +22,18 @@ def generate_random_string(length=15) -> str:
     return random_string
 
 
+def generate_studentid(*args) -> str:
+    """Generate Student ID"""
+    # student_initial
+    characters = string.ascii_uppercase + string.digits
+    current_year: str = str(datetime.now().year)
+    initials = get_initials(*args)
+
+    random_string: str = ''.join(secrets.choice(characters) for _ in range(3))
+
+    return "HHA" + random_string + initials + current_year
+
+
 def generate_random_receipt_number(length=10) -> str:
     """Generating receipt number"""
 
@@ -40,7 +49,7 @@ def get_initials(*args) -> str:
         if n is not None and n != "":
             # print(f"This is the string {n}")
             first_letter += n.strip()[0]
-    return first_letter
+    return first_letter.upper()
 
 
 class_to_fee_group: dict[str, tuple[str]] = {
