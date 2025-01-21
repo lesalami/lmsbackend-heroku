@@ -622,7 +622,7 @@ class StudentFeeGroupView(viewsets.ModelViewSet):
     """API View for the student fee grup"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = StudentFeegroupSerializer
-    queryset = StudentFeeGroup.objects.all()
+    queryset = StudentFeeGroup.objects.filter(academic_year__is_active=True)
     http_method_names = ["get", "post", "patch", "delete"]
     pagination_class = StandardResultsSetPagination
 
@@ -644,7 +644,7 @@ class StudentClassView(viewsets.ModelViewSet):
         'update': (SchoolAdmin,)
         }
     serializer_class = StudentClassSerializer
-    queryset = StudentClass.objects.all().order_by("-date_created")
+    queryset = StudentClass.objects.filter(academic_year__is_active=True).order_by("-date_created")
     http_method_names = ["get", "post", "patch", "delete"]
     pagination_class = StandardResultsSetPagination
 
