@@ -25,4 +25,5 @@ dj-database-url
 django-storages
 boto3
 botocore
+django_heroku==0.3.1
 

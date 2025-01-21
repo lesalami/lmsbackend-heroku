@@ -16,6 +16,7 @@ import sys
 from datetime import timedelta
 import logging
 import dj_database_url
+import django_heroku
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -191,6 +192,8 @@ else:
     MEDIA_URL = "media/"
     MEDIA_ROOT = os.environ.get("MEDIA_DIR")
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+django_heroku.settings(locals(), staticfiles=False)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
