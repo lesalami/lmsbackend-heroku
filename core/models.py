@@ -511,6 +511,8 @@ class StudentClass(models.Model):
     def save(self, *args, **kwargs) -> Any:
         # Calculate the new owing after the payment
         fee_owing_from_previous_year = 0
+        current_fee_owing = 0
+        self.fee_owing = 0
         if self.academic_year:
             if self.academic_year.previous:
                 "Check if student has an outstanding fee"
