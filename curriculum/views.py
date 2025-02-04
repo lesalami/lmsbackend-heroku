@@ -535,7 +535,7 @@ class ClassView(viewsets.ModelViewSet):
     serializer_class = ClassSerializer
     queryset = Class.objects.all().order_by("-date_created")
     http_method_names = ["get", "post", "patch", "delete"]
-    pagination_class = StandardResultsSetPagination
+    # pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = [
         'date_created'
