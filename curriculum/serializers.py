@@ -185,36 +185,32 @@ class StudentSerializer(BaseModelSerializer):
     def update(self, instance, validated_data):
         std_class = validated_data.pop("student_class", None)
         fee_assigned = validated_data.pop("fee_assigned", None)
-        fee_grp = StudentFeeGroup.objects.get(id=fee_assigned)
+        fee_grp = None
+        if fee_assigned:
+            fee_grp = StudentFeeGroup.objects.get(id=fee_assigned)
         updated_instance = super().update(instance, validated_data)
-        if std_class:
+        if std_class and std_class != StudentClass.objects.get(student=instance).id:
             if StudentClass.objects.filter(
                     student=updated_instance,
                     student_class=std_class
                     ).exists():
+                my_student_class = StudentClass.objects.get(
+                        student=updated_instance,
+                        student_class=std_class
+                        )
+                if not fee_grp:
+                    fee_grp = my_student_class.fee_assigned
                 stc_validated = {
                     "student": updated_instance,
                     "fee_assigned": fee_grp
                 }
-                StudentClassSerializer().update(
+                StudentClassSerializer(context=self.context).update(
                     instance=StudentClass.objects.get(
                         student=updated_instance,
                         student_class=std_class
                         ),
                     validated_data=stc_validated
                 )
-            # else:
-        if StudentClass.objects.filter(student=instance).exists():
-            stc_validated = {
-                "student": updated_instance,
-                "fee_assigned": fee_grp
-            }
-            StudentClassSerializer(context=self.context).update(
-                instance=StudentClass.objects.get(
-                    student=updated_instance
-                    ),
-                validated_data=stc_validated
-            )
         return updated_instance
 
 
