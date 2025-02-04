@@ -168,7 +168,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
 # STATIC_URL = '/static/'
-USE_S3 = True
+USE_S3 = os.environ.get("USE_S3", False)
 
 if USE_S3:
     # aws settings
