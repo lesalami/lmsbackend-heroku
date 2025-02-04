@@ -44,7 +44,7 @@ from core.models import (
     PaymentReceipt, FeeArrear, ArrearPayment,
 )
 
-from utils.pagination import StandardResultsSetPagination
+from utils.pagination import StandardResultsSetPagination, ClassResultPagination
 from utils.pdf_generate import convert_html_to_pdf
 from core.utils import StaffType
 from utils.custom_permissions import SchoolAdmin
@@ -535,7 +535,7 @@ class ClassView(viewsets.ModelViewSet):
     serializer_class = ClassSerializer
     queryset = Class.objects.all().order_by("-date_created")
     http_method_names = ["get", "post", "patch", "delete"]
-    # pagination_class = StandardResultsSetPagination
+    pagination_class = ClassResultPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = [
         'date_created'
