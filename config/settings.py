@@ -180,12 +180,13 @@ if USE_S3:
     AWS_S3_OBJECT_PARAMETERS = {'CacheControl': 'max-age=86400'}
     # s3 static settings
     STATIC_LOCATION = 'static'
-    STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+    STATIC_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/'
     STATIC_ROOT = os.environ.get("STATIC_DIR", "staticfiles")
     STATICFILES_STORAGE = "storages.backends.s3.S3Storage"
     # s3 public media settings
     PUBLIC_MEDIA_LOCATION = 'media'
-    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
+    MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/{PUBLIC_MEDIA_LOCATION}/'
+    MEDIA_ROOT = os.environ.get("MEDIA_DIR", "mediafiles")
     DEFAULT_FILE_STORAGE = "storages.backends.s3.S3Storage"
 else:
     STATIC_URL = 'static/'
